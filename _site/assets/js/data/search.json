@@ -1,0 +1,21 @@
+[
+  
+  {
+    "title": "How I Made This Site",
+    "url": "/posts/how-site-made/",
+    "categories": "hmm",
+    "tags": "websitebuilder, jekyll, ruby",
+    "date": "2022-02-25 21:00:00 -0800",
+    
+
+
+
+
+
+    
+    "snippet": "This site was made using Jekyll and was incredibly easy to make. Literally no code at all, and super functional, beautiful, and modern. I started using the Chirpy Starter repo, following this aweso...",
+    "content": "This site was made using Jekyll and was incredibly easy to make. Literally no code at all, and super functional, beautiful, and modern. I started using the Chirpy Starter repo, following this awesome YouTube walkthrough by creator Techno Tim. He gives pretty much all the instructions, but here are some idiosyncrasies that you might face along the way and some tips to help you get started.DependenciesAs this site was generated using Jekyll, which is written in Ruby, there are a bunch of installations to do if you don’t typically use Ruby. In particular, make sure that the following are up-to-date (I use a Mac; so this advice is most useful for Mac users):  Ruby  Xcode (you might run into problems like pkg-config not being ablt to find compiler libraries like openssl otherwise)Out-of-the-box FunctionalitiesRight out of the box, this template supports all sorts of mark-down (including emojis 👾, which is written in hexadecimal), code blocks (which I conveniently demonstrate by showing the front matter of my posts to enable mathjax (latex)):---published: truetitle: How Site Madedate: 2023-02-27 00:00:00 -500categories: [hmm]tags: [websitebuilder,jekyll]math: true---\\[\\left( \\frac{\\text{omg }\\textbf{it's a}}{\\text{LateX}}\\Rightarrow \\text{ Block Equation} \\right)\\]light / dark mode supported theme, RSS, and search! It’s great; 💛 the Chirpy people (it’s open-source).My CustomizationsBecause I wanted to change things like fonts and colors, I decided to self-host chirpy-static-assets. This allows me to edit css files (I found the alternatives too troublesome). It was fairly straightforward, following the instructions on the github repo. For example, I found that editing fonts in /Library/Ruby/Gems/2.6.0/jekyll-theme-chirpy-5.5.2/_sass/addon/commons.scss allowed me to change fonts."
+  }
+  
+]
+
