@@ -1,0 +1,44 @@
+[debug] [2023-03-01T00:20:14.334Z] ----------------------------------------------------------------------
+[debug] [2023-03-01T00:20:14.336Z] Command:       /usr/local/bin/node /usr/local/bin/firebase init hosting
+[debug] [2023-03-01T00:20:14.336Z] CLI Version:   11.24.0
+[debug] [2023-03-01T00:20:14.337Z] Platform:      darwin
+[debug] [2023-03-01T00:20:14.337Z] Node Version:  v19.7.0
+[debug] [2023-03-01T00:20:14.337Z] Time:          Tue Feb 28 2023 16:20:14 GMT-0800 (Pacific Standard Time)
+[debug] [2023-03-01T00:20:14.337Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2023-03-01T00:20:14.394Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2023-03-01T00:20:14.395Z] > authorizing via signed-in user (ryan.rtjj@gmail.com)
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  /Users/ryantjj/Documents/personal_website/ryan.rtjj.github.io
+
+Before we get started, keep in mind:
+
+  * You are initializing within an existing Firebase project directory
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] but for now we'll just set up a default project.
+[info] 
+[debug] [2023-03-01T00:20:14.398Z] Using project from CLI flag: personal-website-8d4dd
+[debug] [2023-03-01T00:20:14.401Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/personal-website-8d4dd [none]
+[debug] [2023-03-01T00:20:14.770Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/personal-website-8d4dd 200
+[debug] [2023-03-01T00:20:14.770Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/personal-website-8d4dd {"projectId":"personal-website-8d4dd","projectNumber":"121187182434","displayName":"personal-website","name":"projects/personal-website-8d4dd","resources":{"hostingSite":"personal-website-8d4dd"},"state":"ACTIVE","etag":"1_21619651-2da6-4348-8780-6b040634e09f"}
+[info] i  Using project personal-website-8d4dd (personal-website) 
+[info] 
+=== Hosting Setup
+[info] 
+[info] Your public directory is the folder (relative to your project directory) that
+[info] will contain Hosting assets to be uploaded with firebase deploy. If you
+[info] have a build process for your assets, use your build's output directory.
+[info] 
