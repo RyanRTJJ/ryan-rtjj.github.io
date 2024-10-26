@@ -1,7 +1,7 @@
 ---
 published: true
 title: How I Made This Site
-date: 2022-02-26 00:00:00 -500
+date: 2023-02-26 00:00:00 -500
 categories: [miscellaneous]
 tags: [websitebuilder,jekyll,ruby]
 math: true
@@ -31,7 +31,17 @@ $$\left( \frac{\text{omg }\textbf{it's a}}{\text{LateX}}\Rightarrow \text{ Block
 light / dark mode supported theme, **RSS**, and **search**! It's great; &#x1F49B; the Chirpy people (it's open-source).
 
 # My Customizations
-Because I wanted to change things like fonts and colors, I decided to self-host [`chirpy-static-assets`](https://github.com/cotes2020/chirpy-static-assets#readme). This entails following all the instructions in that page. This allows me to edit css files (I found the alternatives too troublesome). It was fairly straightforward, following the instructions on the github repo. For example, I found that editing fonts in `/Library/Ruby/Gems/2.6.0/jekyll-theme-chirpy-5.5.2/_sass/addon/commons.scss` allowed me to change fonts. Adding the font files was as easy as plopping them into `assets/lib/fonts/`. 
+Because I wanted to change things like fonts and colors, I decided to self-host [`chirpy-static-assets`](https://github.com/cotes2020/chirpy-static-assets#readme). This entails following all the instructions on that page, with the difference of setting `env` to be EMPTY in `_config.yml`:
+```yml
+# Self-hosted static assets, optional › https://github.com/cotes2020/chirpy-static-assets
+assets:
+  self_host:
+    enabled: true     # boolean, keep empty means false
+    # specify the Jekyll environment, empty means both
+    # only works if `assets.self_host.enabled` is 'true'
+    env:  # [development|production]
+``` 
+This allows me to edit css files (I found the alternatives too troublesome). It was fairly straightforward, following the instructions on the github repo. For example, I found that editing fonts in `/Library/Ruby/Gems/2.6.0/jekyll-theme-chirpy-5.5.2/_sass/addon/commons.scss` allowed me to change fonts. Adding the font files was as easy as plopping them into `assets/lib/fonts/`. 
 
 # Deployment:
 ## References

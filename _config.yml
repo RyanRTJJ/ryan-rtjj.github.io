@@ -33,12 +33,12 @@ github:
   username: RyanRTJJ             # change to your github username
 
 twitter:
-  username: twitter_username            # change to your twitter username
+  username:             # change to your twitter username
 
 social:
   # Change to your full name.
   # It will be displayed as the default author of the posts and the copyright owner in the Footer
-  name: Ryan Tan
+  name: Amagibaba
   email: ryantjj@cs.stanford.edu        # change to your email address
   links:
     # The first element serves as the copyright owner's link
@@ -55,7 +55,7 @@ google_site_verification:               # fill in to your verification string
 # The end of `jekyll-seo-tag` settings
 
 google_analytics:
-  id:                 # fill in your Google Analytics ID
+  id: 'G-QZY6TGFDVQ'  # fill in your Google Analytics ID
   # Google Analytics pageviews report settings
   pv:
     proxy_endpoint:   # fill in the Google Analytics superProxy endpoint of Google App Engine
@@ -82,7 +82,7 @@ theme_mode:   # [light|dark]
 img_cdn:
 
 # the avatar on sidebar, support local or CORS resources
-avatar: /images/profile_pic_camb_bw.jpg
+avatar: /images/cake.png
 
 # boolean type, the global switch for ToC in posts.
 toc: true
@@ -113,7 +113,7 @@ assets:
     enabled: true     # boolean, keep empty means false
     # specify the Jekyll environment, empty means both
     # only works if `assets.self_host.enabled` is 'true'
-    env: development  # [development|production]
+    env:  # [development|production]
 
 pwa:
   enabled: true   # the option for PWA feature
