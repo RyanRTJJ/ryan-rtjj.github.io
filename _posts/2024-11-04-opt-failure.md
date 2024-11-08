@@ -171,11 +171,30 @@ So, $W$ and $\text{ReLU}$ are definitely not sufficient to account for what Anth
 <img src = "../../images/opt_failure/anthropic_infinite_vectors.png" alt="Memorized Training Examples" width="100%">
 *Latent vectors of datasets as T increases (under a certain threshold limit), image from their paper*
 
-So how on earth does this happen? This is where the bias $b$ comes in.
+So how on earth does this happen? This is where the bias $b$ comes in. But before that, let's take a quick look at what happens when we try to memorize more than $2m$ $m$-dimensional axial vectors with only an $m$-dimensional latent space.
+
+# Imperfect Reconstruction: $n > 2m$
+
+When $n > 2m$, the model will still try to learn a $W$ matrix whose columns are geometrically regular. In this case, we'll examine $n = 5, m = 2$. **Aside**: if you tried to project an $n$-dimensional hypercube down to the $m$-dimensional hyperplane in a way that mapped the $n$-dimensional axial lines to the columns of $W$, the $n$-dimensional hypercube would look VERY regular (which is special; any randomly sampled orientation of a hypercube is exceedingly likely to have a 2D projection that looks very asymmetrical). I trained such an autoencoder and got the following columns of $W$ (and plotted the corresponding projection of the implied 5D hypercube):
+
+<img src = "../../images/opt_failure/splat_5d_perfect.png" alt="Five 5D axial vectors embedded into 2D space, + some rotation" width="400px">
+*Five 5D axial vectors embedded into 2D space, + some rotation*
+
+These five 2D feature vectors, when projected back out to 5D space via $W^\top$, (i.e. the columns of $W^\top W$), do not fulfill the unique positive value criteria; each of them has more than 1 positive entry. As such, $\text{ReLU}$ is unable to snap these 5D feature vectors cleanly back to the axial lines. The reconstruction is **not** perfect and has some loss. In particular, the extraneous / "wrong" positive entries of each column of $W^\top W$ will contribute some error.
+
+Lastly, let's address the intuition for why $W$ is still pressured to space these feature vectors out and achieve that regular geometry. Remember that the Toy ReLU Autoencoder was trained using the Mean Squared Error (MSE) loss function, which is quadratic:
+
+$$
+\mathcal{L}(W, X) = \frac{1}{|X|} \sum_{x \in X} (x' - x)^2
+$$
+
+This means that the greater the extraneous positive entries, the quadratically greater the loss. This makes it prefer evenly spaced out columns of $W$, and here's why. Because angular space is finite, preferentially spacing out any pair of feature vectors will necessarily mean that other pairs of feature vectors will be squeezed closer together. The additional loss incurred by the squeezed vectors will weigh quadratically as much as the loss "saved" by the spaced out vectors, resulting in greater overall loss. This is why $W$ still faces optimization pressure to distribute the error evenly to all feature vectors and achieve that geometric regularity. This is standard behavior whenever you use some sort of convex loss function, which MSE is, but I thought I would just point it out.
+
+> Actually, loss here is not quadratic with respect to the angle between the vectors, but a composition of the quadratic MSE Function and the cosine function, which ends up being a sinusoidal function ($- \cos^2$, to be specific), not quadratic. But the sinusoidal loss function is convex between $-\frac{\pi}{2}$ and $\frac{\pi}{2}$, which is what we care about. Explaining this fully is rather involved and will remain out of scope of this post. TLDR: the above explanation holds.
 
 # The role of $b$
 
 By now, we can observe 2 things:
-- The representations of these axial vectors in the 2D latent space mimic the spokes of a wheel
-- Trying to represent more than $2m$ axial vectors in an $m$-dimensional latent space will violate the unique positive value criteria
+- Because of the optimization pressure to achieve geometric regularity, the representations of these axial vectors in the 2D latent space mimic the spokes of a wheel (generalizable to higher-dimensional hyperspheres).
+- Trying to represent more than $2m$ axial vectors in an $m$-dimensional latent space will violate the unique positive value criteria.
 
