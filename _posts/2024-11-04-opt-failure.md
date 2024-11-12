@@ -182,7 +182,7 @@ When $n > 2m$, the model will still try to learn a $W$ matrix whose columns are 
 
 These five 2D feature vectors, when projected back out to 5D space via $W^\top$, (i.e. the columns of $W^\top W$), do not fulfill the unique positive value criteria; each of them has more than 1 positive entry. As such, $\text{ReLU}$ is unable to snap these 5D feature vectors cleanly back to the axial lines. The reconstruction is **not** perfect and has some loss. In particular, the extraneous / "wrong" positive entries of each column of $W^\top W$ will contribute some error.
 
-Lastly, let's address the intuition for why $W$ is still pressured to space these feature vectors out and achieve that regular geometry. Remember that the Toy ReLU Autoencoder was trained using the Mean Squared Error (MSE) loss function, which is quadratic:
+Lastly, let's address the intuition for why $W$ is still pressured to space these feature vectors out and achieve that regular geometry. There are some big caveats here that could be the cause(s) of optimization failure; take everything in the next 2 paragraphs at face-value. Remember that the Toy ReLU Autoencoder was trained using the Mean Squared Error (MSE) loss function, which is quadratic:
 
 $$
 \mathcal{L}(W, X) = \frac{1}{|X|} \sum_{x \in X} (x' - x)^2
@@ -190,7 +190,25 @@ $$
 
 This means that the greater the extraneous positive entries, the quadratically greater the loss. This makes it prefer evenly spaced out columns of $W$, and here's why. Because angular space is finite, preferentially spacing out any pair of feature vectors will necessarily mean that other pairs of feature vectors will be squeezed closer together. The additional loss incurred by the squeezed vectors will weigh quadratically as much as the loss "saved" by the spaced out vectors, resulting in greater overall loss. This is why $W$ still faces optimization pressure to distribute the error evenly to all feature vectors and achieve that geometric regularity. This is standard behavior whenever you use some sort of convex loss function, which MSE is, but I thought I would just point it out.
 
-> Actually, loss here is not quadratic with respect to the angle between the vectors, but a composition of the quadratic MSE Function and the cosine function, which ends up being a sinusoidal function ($- \cos^2$, to be specific), not quadratic. But the sinusoidal loss function is convex between $-\frac{\pi}{2}$ and $\frac{\pi}{2}$, which is what we care about. Explaining this fully is rather involved and will remain out of scope of this post. TLDR: the above explanation holds.
+### Caveat 1: Loss is not actually quadratic, only convex
+
+Actually, loss here is not quadratic with respect to the angle between the vectors, but a composition of the quadratic MSE Function and the cosine function, which ends up being a sinusoidal function:
+
+$$
+\begin{align*}
+\mathcal{L}\left(\theta, x^{(1)}, x^{(2)}\right) &= \left(\max(0, \cos(\theta))\right)^2 \\
+&= \frac{1}{2}\left(\cos(2\theta) + 1 \right)
+\end{align*}
+$$
+
+This is not quadratic, but it is still convex near $\theta = \pm \frac{\pi}{2}$.
+
+<img src = "../../images/opt_failure/loss_over_theta.png" alt="Loss over theta" width="100%">
+*Loss over angle between 2 vectors*
+
+### Caveat 2: Loss is only convex near $\theta = \pm \frac{\pi}{2}$
+
+This means that the system faces different optimization preferences when the feature vectors (columns of $W$) are in the range $\frac{-\pi}{2} < \theta < \frac{\pi}{2}$. We will investigate more later.
 
 # The role of $b$
 
@@ -198,3 +216,13 @@ By now, we can observe 2 things:
 - Because of the optimization pressure to achieve geometric regularity, the representations of these axial vectors in the 2D latent space mimic the spokes of a wheel (generalizable to higher-dimensional hyperspheres).
 - Trying to represent more than $2m$ axial vectors in an $m$-dimensional latent space will violate the unique positive value criteria.
 
+Previously, I said that the combined powers of $W$ and $\text{ReLU}$ can only allow us to hydrate $2m$ $n$-dimensional axial lines from an $m$-dimensional latent space. The intuition for that is basically that in an $m$-dimensional latent space, you can only fit $2m$ orthogonal pairs of antipodal lines. If your vectors are forced to be less than $90^\circ$ apart from each other, then you get some interference. But, it turns out, that $b$ can basically absorb all that interference by trading off some "sensitivity". Let's see how that works. Much of the proof was worked out by Henighan in this [Google Colab Notebook](https://colab.research.google.com/drive/1AREdeODhgsQ_ukqPKnhWQ4bijVqTa4eW?usp=sharing#scrollTo=Or1plIMKqUts).
+
+The intuition thus far was for the latent space (a plane in all our examples so far) to be pivoted at the origin, but it doesn't have to be pivoted at the origin. In particular, you could add a negative bias in all dimensions such that you can shift the latent representations away from the origin, into the region of space where all dimensions are negative:
+
+<img src = "../../images/opt_failure/feat_wheel.png" alt="Feature wheel with bias" width="400px">
+*Feature representations in latent space, with bias*
+
+This isn't super useful, because if all your features were represented in the negative regions of space, $\text{ReLU}$ would come along and zero everything; you have no information. However, you can shift the feature wheel in a way such that 1 feature vector is in a region of space with 1 positive dimension, while the rest of the feature vectors are in a region of space of non-negatives:
+
+<img src = "../../images/opt_failure/shifted_feat_wheel.png" alt="Shifted Feature wheel" width="100%">
