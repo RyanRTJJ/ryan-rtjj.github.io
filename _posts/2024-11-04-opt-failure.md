@@ -226,3 +226,62 @@ The intuition thus far was for the latent space (a plane in all our examples so 
 This isn't super useful, because if all your features were represented in the negative regions of space, $\text{ReLU}$ would come along and zero everything; you have no information. However, you can shift the feature wheel in a way such that 1 feature vector is in a region of space with 1 positive dimension, while the rest of the feature vectors are in a region of space of non-negatives:
 
 <img src = "../../images/opt_failure/shifted_feat_wheel.png" alt="Shifted Feature wheel" width="100%">
+
+With just 3 vectors, you may think that the shifting is unnecessary, because even with the wheel of features pivoted at the origin ($0$ bias), the 3 feature vectors already fulfilled the unique positive value criteria. However, if we had more than 3 vectors, e.g. we have 8 $8$-dimensional axial vectors projected down onto a 2D wheel similarly, then the shifting is necessary to ensure that each one of those unique positive value criteria-fulfilling regions only has 1 feature vector.
+
+<img src = "../../images/opt_failure/shifted_feat_wheel_crowded.png" alt="Shifted Feature wheel crowded" width="100%">
+
+In the above image, we can only see that 3 feature vectors are in the correct regions that make them fulfill the unique positive value criteria, but that is merely because we are unable to visualize an 8-dimensional space. If we could plot the above wheel in an 8D space as opposed to a 3D one, we would see that all 8 feature vectors are in their correct respective regions.
+
+## Can this really generalize to higher dimensions?
+
+The last paragraph above is not intuively obvious because we can't visualize more than 3 dimensions, so we can fall back on analysis to see that this really works. Here is where I will liberally quote the work of Henighan, in that Colab Notebook. This section is more mathematical analysis and less intuition, so feel free to skip it.
+
+Henighan starts of by declaring the dataset $X$ the identity matrix, without loss of generality. This works, because thus far we've been assuming that the dataset is just points that align with the axis lines. This means that the data points (the rows of $X$) are one-hot, with their activated element being in unique positions. The identity matrix is just a neat way of arranging these rows, with the $i$-th row being active in the $i$-th position. This makes the objective of the ReLU toy model to reconstruct the identity matrix:
+
+$$
+\begin{align*}
+X' & = \text{ReLU} \left( X W^\top W + b \right)\\
+\Rightarrow I &= \text{ReLU} \left( W^\top W + b \right)
+\end{align*}
+$$
+
+This means that for this to work, the diagonal entries of $(W^\top W + b)$ need to be the ONLY entries $> 0$; hence the goal becomes to find $W$ and $b$ such that this is true.
+
+He starts off with an a guess for $W$, based on the assumption that the columns (2D vectors) of $W$ will represent vectors that are spaced out evenly over a circle:
+
+$$
+\begin{align*}
+W = \begin{bmatrix} \cos(0) & \cos(\phi) & \cdots & \cos(-\phi) \\
+\sin(0) & \sin(\phi) & \cdots & \sin(-\phi)
+\end{bmatrix} \text{, where } \phi = \frac{2 \pi}{\text{num examples / features}}
+\end{align*}
+$$
+
+This guess turns out to work in most cases, because of my above explanation on how the partially convex loss function causes $W$ to distribute the total $2 \pi$ radians in a circle over each consecutive pair of vectors as evenly as possible. **(Foreshadow possible optimization failure)**
+
+And so, $W^\top W$ looks like this, after a bunch of massaging with the trigonometric identities:
+
+$$
+\begin{align*}
+W^\top W =
+\begin{bmatrix}
+\cos(0) & \cos(\phi) & \cos(2\phi) & \cdots & \cos(-\phi) \\
+\cos(-\phi) & \cos(0) & \cos(\phi) & \cdots & \cos(-2\phi) \\
+\cos(-2\phi) & \cos(-\phi) & \cos(0) & \cdots & \cos(-3\phi) \\
+\cos(-3\phi) & \cos(-2\phi) & \cos(-\phi) & \cdots & \cos(-4\phi) \\
+\vdots & \vdots & \vdots & \ddots & \vdots \\
+\cos(2\phi) & \cos(3\phi) & \cos(4\phi) & \cdots & \cos(\phi) \\
+\cos(\phi) & \cos(2\phi) & \cos(3\phi) & \cdots & \cos(0) \\
+\end{bmatrix}
+\end{align*}
+$$
+
+But since that doesn't look like much, let's look at the matrix in visual form (if you had $10$ 10D vectors now):
+
+<img src = "../../images/opt_failure/WTW_visual.png" alt="WTW visual" width="400px">
+*A visual depiction of W.T @ W*
+
+I've highlighted the maximum value of each row (column too) in the above image. Remember that because $X' = \text{ReLU}(W^\top W X + b)$, and $X = I$, each row here represent the pre-ReLU, pre-bias representations of each data point. From here, it's obvious that you can just subtract the second-highest value of each row (i.e. $\cos(\phi)$) from every single value, and every row will just have ONE value that is $> 0$ - the blue entries, a.k.a. the diagonal. This explanation works for any $n$, so it will indeed generalize to any $n$. 
+
+# Explain sensitivity. Question linear probe explanation.
