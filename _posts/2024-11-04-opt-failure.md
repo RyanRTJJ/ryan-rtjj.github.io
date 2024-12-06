@@ -284,4 +284,43 @@ But since that doesn't look like much, let's look at the matrix in visual form (
 
 I've highlighted the maximum value of each row (column too) in the above image. Remember that because $X' = \text{ReLU}(W^\top W X + b)$, and $X = I$, each row here represent the pre-ReLU, pre-bias representations of each data point. From here, it's obvious that you can just subtract the second-highest value of each row (i.e. $\cos(\phi)$) from every single value, and every row will just have ONE value that is $> 0$ - the blue entries, a.k.a. the diagonal. This explanation works for any $n$, so it will indeed generalize to any $n$. 
 
-# Explain sensitivity. Question linear probe explanation.
+One small nitpick is that Anthropic said that this set up of embedding $n$-dimensional vectors in $m=2$-dimensional latent space can memorize "**any** number of examples [or features]", but it's obvious here that it's not really **any** number of features; it's just any number that is $\leq n$, because once you have $n + 1$, by the pigeonhole argument, there will be at least 1 unique single value criteria-fulfilling hyperquadrant with more than 1 example / feature vector in it. That said, if you allowed $n$ to increase with your number of examples / features, then it really is infinite. This is where the added requirement of having infinite floating point precision also makes sense, because as $\phi \rightarrow 0$, the difference between $\cos(0) = 1$ and $\cos(\phi)$ also tends to $0$.
+
+## Cost of absorbing interference: decrease sensitivity
+
+By adjusting $b$ to shift the feature wheel in such a manner, you also notice that the length of the part of each vector that is in the correct unique single value criteria-fulfilling hyperquadrant is also shortened. Visually, you can observe this by noticing that the part of the "positive z" vector that is $> 0$ is only the tip of the vector, and not the full length of it. Same goes for the "positive x" and "positive y" vectors. This means that **for that feature to be reconstructable, the original input's value in that feature needs to be more strongly activated**. A small value of the feature will not be reconstructable because its representation in the latent space is $< 0$ in all dimensions. I find this intuitive - the **bias is commonly explained as a threshold that a neuron needs to be activated beyond in order to make the neuron "fire"**. If it's too weak, the neuron simply won't fire.
+
+# Question 1: Does the Optimization Failure solution pursue linear separability?
+
+Finally, we have come to the point where we have sufficient intuition to begin investigating Optimzation Failure. The first question we shall investigate is as written in the title of this section. I'm particularly interested in this question because Olah and Henighan claim that in the case of Optimization Failure, "in order for points on the small circle to be linearly separated from points on the large one, there must be a large angular gap."
+
+In so doing, I think the natural first step is to see what regions in latent space ($h = Wx$) correspond to the axial lines, post-ReLU. To do this, I randomly sample a bunch of vectors between the origin and the ones vector, i.e. $X = \\{x \mid x \in [0,1]^n\\}$, for $n = 5$. Then, I calculate their latent representations ($h$), and plot only the points that will eventually be transformed to live on the axial lines (i.e. $x' = \text{ReLU}(W^\top Wx + b)$ lies on some axis), color-coded for each axis.
+
+<img src = "../../images/opt_failure/probe_is_somewhat_linear_1.png" alt="Color coded regions" width="600px">
+*Regions of the latent space that will be decoded to be axis-aligned*
+
+In this case, it is clear that a benefit of having the vectors spaced out as far as possible (large angular gap) in a circle is that each vector is as far out of the convex hull created by all the other vectors as possible. I.E., each vector is as linearly separable from the rest as possible. However, it is unclear that this linear separability is the optimization pressure that causes the vectors to be spaced out - it seems plausible that Olah and Henighan may be wrong in attributing the cause of the large angular gap to the pursuit of linear separability.
+
+To investigate this, we shall now take a look at some of the Optimization Failure solutions I've found, for higher $n$.
+
+<img src = "../../images/opt_failure/opt_failure_8_asymmetric.png" alt="Opt Failure n=8 Asymmetric" width="600px">
+*Regions of interest in latent space for Optimization Failure Solution (asymmetric, n = 8)*
+
+There are 2 interesting things here: there are 5 axes that are not reconstructible (not represented in the latent space), and the <span style="color: lightsalmon">**salmon-colored region**</span> is clearly not the same shape as the <span style="color: indianred">**orange-red region**</span>, because one corner of the <span style="color: lightsalmon">**salmon triangle**</span> is clipped off at an angle; the angle also seems perpendicular to the <span style="color: firebrick">**short dark red vectors (there are actually 2 overlapping vectors)**</span>, suggesting a relationship there. So, clearly, in the Optimzation Failure Solution, **linear-separability of the features doesn't matter that much**, because there are axial lines (features in the data space / input space) that the model doesn't care about representing.
+
+Let's take a look at a more symmetric Optimization Failure Solution:
+
+<img src = "../../images/opt_failure/opt_failure_7_asymmetric.png" alt="Opt Failure n=7 Asymmetric" width="600px">
+*Regions of interest in latent space for Optimization Failure Solution (somewhat symmetric, n = 7)*
+
+In this solution, all axial lines are represented, albeit in a very imbalanced manner. The vectors are not very spaced equally apart, which is not in line with our intuition of $W$ preferring to space them equally apart under a convex loss, and the shorter feature is also considerably longer than is minimally necessary to achieve linear separability; linear separability almost seems like an incidental property, rather than the main optimization goal.
+
+## A Different Approach: Observing Training Process
+
+That doesn't really shine a lot of light other than show that the intuitions that maybe:
+- A key purpose of having larger angular gaps in shorter feature vectors is to achieve linear separability
+- Features arrange themselves in discrete groups (circles) of different radii
+
+Were both not quite right.
+
+Having these plots also don't really allow us to intuitively understand how the latent space (2D plane) is tilted / offset in $n$-dimensional space, so the only thing we can do is to really inspect the values of $W$, $b$, loss, and see how they change over the training process.
