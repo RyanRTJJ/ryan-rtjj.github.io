@@ -294,33 +294,98 @@ By adjusting $b$ to shift the feature wheel in such a manner, you also notice th
 
 Finally, we have come to the point where we have sufficient intuition to begin investigating Optimzation Failure. The first question we shall investigate is as written in the title of this section. I'm particularly interested in this question because Olah and Henighan claim that in the case of Optimization Failure, "in order for points on the small circle to be linearly separated from points on the large one, there must be a large angular gap."
 
-In so doing, I think the natural first step is to see what regions in latent space ($h = Wx$) correspond to the axial lines, post-ReLU. To do this, I randomly sample a bunch of vectors between the origin and the ones vector, i.e. $X = \\{x \mid x \in [0,1]^n\\}$, for $n = 5$. Then, I calculate their latent representations ($h$), and plot only the points that will eventually be transformed to live on the axial lines (i.e. $x' = \text{ReLU}(W^\top Wx + b)$ lies on some axis), color-coded for each axis.
+In so doing, I think the natural first step is to see what regions in latent space ($h = Wx$) correspond to the axial lines, post-ReLU. I found it useful to plot what I call **"latent zones"**:
 
-<img src = "../../images/opt_failure/probe_is_somewhat_linear_1.png" alt="Color coded regions" width="600px">
-*Regions of the latent space that will be decoded to be axis-aligned*
+<img src = "../../images/opt_failure/latent_zone_intro_1.png" alt="Latent zone intro" width="100%">
 
-In this case, it is clear that a benefit of having the vectors spaced out as far as possible (large angular gap) in a circle is that each vector is as far out of the convex hull created by all the other vectors as possible. I.E., each vector is as linearly separable from the rest as possible. However, it is unclear that this linear separability is the optimization pressure that causes the vectors to be spaced out - it seems plausible that Olah and Henighan may be wrong in attributing the cause of the large angular gap to the pursuit of linear separability.
+In the above example, I trained a bunch of $n=6, m=2$ autoencoders, and selected one where the model learnt to perfectly reconstruct all features. On the left, you can see the column vectors of $W$ arranged into a perfect circle. On the right, I plotted the regions of the latent space (2-dimensional) that correspond to an activation of the $i$-th feature. For example, in order to activate (reconstruct) the <span style="color: darksalmon">**orange feature**</span> in the reconstructed vector, the hidden vector computed by the model needs to be in the <span style="color: darksalmon">**orange region**</span>.
 
-To investigate this, we shall now take a look at some of the Optimization Failure solutions I've found, for higher $n$.
+> **Plotting quirks:** Notice that the latent space seems to be limited to a hexagon, rather than the entire 2D subspace. This is merely a quirk of my plotting logic; since the non-zero entries of our input vectors (the standard basis vectors) are all $1$'s, it is sufficient to plot a portion of the latent space that contains all the columns of $W$ in 2D (equivalent: all the columns of $WI$ in $n$-dimensional latent space). Such a portion of space is simply given by the outline drawn by enumerating the columns of $W$ in a clockwise fashion. 
 
-<img src = "../../images/opt_failure/opt_failure_8_asymmetric.png" alt="Opt Failure n=8 Asymmetric" width="600px">
-*Regions of interest in latent space for Optimization Failure Solution (asymmetric, n = 8)*
+> Occasionally, you will also see that there is a kink in the shape, so instead of expecting a nice hexagon (or heptagon) for 7 points, you may observe an "indented pac-man". This is simply because there is a point that is so near to the origin (the mouth of the pac-man) that connecting all the 7 points results in a pac-man shape.
 
-There are 2 interesting things here: there are 5 axes that are not reconstructible (not represented in the latent space), and the <span style="color: lightsalmon">**salmon-colored region**</span> is clearly not the same shape as the <span style="color: indianred">**orange-red region**</span>, because one corner of the <span style="color: lightsalmon">**salmon triangle**</span> is clipped off at an angle; the angle also seems perpendicular to the <span style="color: firebrick">**short dark red vectors (there are actually 2 overlapping vectors)**</span>, suggesting a relationship there. So, clearly, in the Optimzation Failure Solution, **linear-separability of the features doesn't matter that much**, because there are axial lines (features in the data space / input space) that the model doesn't care about representing.
+To fully appreciate why the activation zones are as such, I illustrate the latent space (a planar hexagon) in a 3D space:
 
-Let's take a look at a more symmetric Optimization Failure Solution:
+<img src = "../../images/opt_failure/latent_zone_intro_2.png" alt="Latent zone intro 2" width="500px">
 
-<img src = "../../images/opt_failure/opt_failure_7_asymmetric.png" alt="Opt Failure n=7 Asymmetric" width="600px">
-*Regions of interest in latent space for Optimization Failure Solution (somewhat symmetric, n = 7)*
+I've also highlighted the <span style="color: royalblue">activation zone of the $z$-th feature</span>, which is simply the part of the latent space with <span style="color: royalblue">$z > 0$</span>. It is now also obvious that **the $z$-th value of the bias is the lever which controls where that blue sliver starts**. A $b_z$ that is more negative means that the latent hexagon is pushed down further along the $z$-axis, meaning that the sliver of the hexagon that satisfies $z > 0$ starts further up the hexagon. Conversely, a less negative $b_z$ means that the hexagon will be situated further up the $z$-axis, meaning that the sliver of the hexagon that satisfies $z > 0$ will start nearer the bottom of the hexagon.
 
-In this solution, all axial lines are represented, albeit in a very imbalanced manner. The vectors are not very spaced equally apart, which is not in line with our intuition of $W$ preferring to space them equally apart under a convex loss, and the shorter feature is also considerably longer than is minimally necessary to achieve linear separability; linear separability almost seems like an incidental property, rather than the main optimization goal.
+# Optimization Failure Examples
+There are only a few ways optimization can fail for this toy model. Let's take a look at what the first way looks like - I'll call it the "Symmetric Failure" mode.
 
-## A Different Approach: Observing Training Process
+<img src = "../../images/opt_failure/symmetric_failure_1.png" alt="Symmetric Failure 1" width="100%">
+*n = 7, m = 2, trained for 25,000 epochs using AdamW*
 
-That doesn't really shine a lot of light other than show that the intuitions that maybe:
-- A key purpose of having larger angular gaps in shorter feature vectors is to achieve linear separability
-- Features arrange themselves in discrete groups (circles) of different radii
+Symmetric Failure happens when the model fails to learn some / a <span style="color: mediumblue">feature</span> (does not represent it **at all**), but does a perfect job of representing the rest (the other 6 features have equal magnitude and are spaced apart equally).
 
-Were both not quite right.
+> We now observe the pac-man shape as opposed to a regular hexagon. As explained above, because I draw the latent shape by simply connecting the 7 feature vectors, the unlearnt feature that is close to the origin causes there to be that pac-man mouth.
 
-Having these plots also don't really allow us to intuitively understand how the latent space (2D plane) is tilted / offset in $n$-dimensional space, so the only thing we can do is to really inspect the values of $W$, $b$, loss, and see how they change over the training process.
+The key things to note are that:
+* For the features that were properly learnt (call them features $1$ to $6$), we see the characteristic activation sliver in the latent space.
+* For the  <span style="color: mediumblue">feature (feature $7$) that was not properly learnt</span>, that feature activates everywhere - the whole latent shape is  <span style="color: mediumblue">blue</span>. This is because this feature's bias value is positive, causing the entire latent shape to have a positive value in the $7$-th dimension.
+* Observing the training process, the fact that this model's internal features stayed like since about step 3,000 means that this is a local optimum.
+
+We know what the perfect solution looks like. The latent shape should be a regular heptagon, and the bias should be such that it pushes the latent shape in the dense negative direction ($[-1, -1, ..., -1]$). It should reside in the completely negative hyper-quadrant except for the 7 activation slivers that have positive values in their respective dimensions. In order to get from the current state of the Symmetric Failure model to this perfect solution, 2 things need to happen:
+* $b_7$ needs to decrease and eventually become negative - this pushes the entire latent shape down into the negative region of the $7$-th dimension (so that it will stop activating everywhere).
+* $W_7$ ($7$-th column of $W$) needs to become non-$0$ (and eventually take its own unique direction, but to learn a non-$0$ value is the first step) - this **introduces a tilt** (more on "tilt" later) in the latent shape such that only a sliver of the shape will be positive in the $7$-th dimension.
+
+Why can't the model do either of these? Let's take begin to describe this local optimum and perturb it to see how strong of a local optimum this is.
+
+> **It's not AdamW's fault**: At some point, I suspected that AdamW may have been the culprit, because AdamW has weight decay, which is a form of regularization. I then trained the autoencoder using Adam without any regularization, but the same optimization failure occurred.
+
+## What is $b_7$? Why can't it decrease?
+
+The first step is to solidify our intuition of $b_7$ and its relation to the position of the latent shape relative to the dim-$7$ axis, and of $W_7$ and its relation to the idea of "tilt". This calls for more illustrations. Since I can't illustrate in more than 3 dimensions, I'll just illustrate in 3D. The nice thing about linear algebra is that the dimensions are all linearly independent, and we can just visualize any subset of dimensions without incurring some error from other dimensions. Hence, we'll visualize our latent shape in dimensions 1, 2, and 7:
+
+<img src = "../../images/opt_failure/disc_simple_1.png" alt="Dimensions 1, 2, 7, simple" width="100%">
+*The 1st, 2nd, and 7th dimension values of the latent shape (7-th dimension is enlarged)*
+
+I've drawn in the bias as well and highlighted <span style="color: mediumblue">$b_7$ (the value of the bias in the 7-th dimension)</span>. The entire hexagonal shape is also shaded blue to remind us that the entire shape is activated ($> 0$) in the 7-th dimension. You may notice that the hexagon seems squished - this is simply due to the fact that visualizing only 3 of the 7 dimensions results in this kind of "perspectival" squishing; the same thing happens when you try to take a purely side-profile look at a square piece of paper that's half-tilted to face the sky - it doesn't look square.
+
+The important thing to note here is that <span style="color: mediumblue">$b_7$</span> is precisely the offset of the hexagonal plane with respect to the <span style="color: mediumblue">dim-$7$ axis</span>. If you increase <span style="color: mediumblue">$b_7$</span>, the plane moves up, and if you decrease it, the plane moves down.
+
+Since <span style="color: mediumblue">$W_7 = 0$</span>, the only thing that can impact the reconstruction of the 7-th feature is $b_7$:
+
+$$
+\begin{align*}
+\hat{y} & = \text{ReLU} \left( W^\top W x + b\right) \\
+\Longrightarrow \hat{y}_7 & = \text{ReLU} \left( W_7^\top W x + b_7 \right) \\
+& = \text{ReLU} (b_7) \text{, because } W_7 = 0
+\end{align*}
+$$
+
+Remember that the model wants to be able to reconstruct a $1$ for the <span style="color: mediumblue">$7$-th feature</span> of the $7$-th data sample, and a $0$ for the <span style="color: mediumblue">$7$-th feature</span> of the other 6 data samples. If you had only 1 variable (<span style="color: mediumblue">$b_7$</span>) to try and do this as well as possible, your best option is really to just encode the mean. And if your measure of error is Mean Square Error (MSE), then that the mean is really your solution. This is rather intuitive, and is also a standard result in Ordinary Least Squares (OLS) Regression because that also aims to minimize MSE. We expect <span style="color: mediumblue">$b_7 = 1/n = 1/7$</span> to hence be a local optimum, and from my experiments, it is indeed observed that <span style="color: mediumblue">$b_7 = 1/n = 1/7$</span>.
+
+## What is $W_7$? Why can't it increase?
+
+In the perfect optimization case, <span style="color: mediumblue">$W_7$</span> is but one of the spokes of the feature wheel, and encodes the 7-th feature. In this case, it is $0$ and has failed to encode the 7-th feature. Turns out, this is also a local optimum; in this Symmetric Failure setup, <span style="color: mediumblue">$W_7$</span> prefers to remain $0$. To understand why this is so, we have to flesh out the idea of "tilt" that I briefly mentioned above.
+
+Here, we go back to $W^\top W$ and compare how it should ideally look, versus how it looks like in this Symmetric Failure case:
+
+<img src = "../../images/opt_failure/ideal_vs_unideal_WTW.png" alt="Ideal vs Unideal WTW" width="100%">
+*Left: ideal W.T @ W (all 7 features learnt). Right: Symmetric Failure W.T @ W (only 6 features learnt)*
+
+The key observation is that the <span style="color: mediumblue">$7$-th row and column are $0$</span>. This means that the latent shape (in the 7D reconstruction space) does not span the 7-th dimension. This means that **the latent shape has no tilt with respect to the 7-th dimension.**
+
+> **Help:** Do we call this the quotient space (Lantent Plane / $e_7$)?
+
+All of the $W_i$ introduce some tilt to the latent plane with respect to their own dimensions. If <span style="color: mediumblue">$W_7$</span> were to learn some non-zero value, it would introduce a tilt in the 7-th dimension. The simple way to see this is that if <span style="color: mediumblue">$W_7 \neq 0$</span>, then the <span style="color: mediumblue">$7$-th row and column</span> will be various non-$0$ values, which means that the plane given by $W^\top W$ will have some translation in the 7-th dimension, $\Longrightarrow$ tilt.
+
+### How tilt is generated
+
+The first thing to note about creating tilt with <span style="color: mediumblue">$W_7$</span>, is that the tilt will favor the <span style="color: mediumblue">$W_7$ direction</span>. This means that the further along <span style="color: mediumblue">$W_7$</span> you go on the latent plane, the more positive the reconstructed value in the 7-th dimension gets. Simple math to sketch it out:
+
+$$
+\begin{align*}
+\hat{y}_7 & = \text{ReLU} \left( W_7^\top W x + b_7 \right) \\
+\end{align*}
+$$
+
+Because $Wx$ is the hidden vector (i.e. "somewhere on the latent plane"), if $h = Wx$ has positive interference with <span style="color: mediumblue">$W_7$</span> (i.e. "along the positive <span style="color: mediumblue">$W_7$ direction"</span>), $W_7^\top Wx$ will be positive. The more $h = Wx$ lies along the positive <span style="color: mediumblue">$W_7$ direction</span>, the greater the value of $W_7^\top W x$, and the greater the value of $\hat{y}_7$.
+
+Relatedly, the second thing to note is that the other features $W_i$ that lie on the same side of <span style="color: mediumblue">$W_7$</span> will also tilt towards a larger value in the 7-th dimension, while the other feathres $W_i$ on the other side of <span style="color: mediumblue">$W_7$</span> will tilt towards a smaller value in the 7-th dimension. To illustrate, let's suppose <span style="color: mediumblue">$W_7$</span> is a mini version of <span style="color: mediumslateblue">$W_6$</span>, i.e. <span style="color: mediumblue">$W_7$</span> $ = a \cdot $<span style="color: mediumslateblue">$W_6$</span> for small $a$:
+
+<img src = "../../images/opt_failure/disc_tilted_W6.png" alt="W7 = 0.2 * W6" width="100%">
+*Tilt introduced when W7 = 0.05 * W6*
+
+For a tiny value of $a = 0.05$, we introduced a tiny tilt to the latent hexagon. Both <span style="color: mediumblue">$W_7$</span> and <span style="color: mediumslateblue">$W_6$</span> are now tilting towards the positive <span style="color: mediumblue">$W_7$</span> direction.
