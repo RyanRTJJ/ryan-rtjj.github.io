@@ -164,7 +164,9 @@ I find this intuition very clear: if you pivot a plane about the $n$-dimensional
 <img src = "../../images/opt_failure/splat_4d_perfect.png" alt="Four 4D axial vectors embedded into 2D space, + some rotation" width="350px">
 *Repeat: four 4D axial vectors embedded into 2D space, + some rotation*
 
-> While I am very confident that this upper bound is correct, and can be achieved with vector sets similar to $[1, -1, 0, 0], [-1, 1, 0, 0], [0, 0, 1, -1], [0, 0, -1, 1]$ (in 4D), I have no proof. It would be satisfying to have a proof, and I would greatly appreciate one.
+> While I am quite confident that this upper bound is correct, and can be achieved with vector sets similar to $[1, -1, 0, 0], [-1, 1, 0, 0], [0, 0, 1, -1], [0, 0, -1, 1]$ (in 4D), I have no proof. It would be satisfying to have a proof, and I would greatly appreciate one.
+
+>**Actually...:** A friend came by to prove this wrong. This is only true in the case of $m = 2$, but he had a pretty stunning postulate: if you have an $s$-hot dataset, you need a $(s + 1)$-dimensional latent space, + bias, for perfect reconstruction. David - wanna provide a proof here?
 
 So, $W$ and $\text{ReLU}$ are definitely not sufficient to account for what Anthropic found - "in fact, the ReLU output model can memorize any number of orthonormal training examples using $T$-gons if given infinite floating-point precision," where $T$ represents the size of the dataset. The memorized training examples have these latent representations:
 
@@ -386,6 +388,133 @@ Because $Wx$ is the hidden vector (i.e. "somewhere on the latent plane"), if $h 
 Relatedly, the second thing to note is that the other features $W_i$ that lie on the same side of <span style="color: mediumblue">$W_7$</span> will also tilt towards a larger value in the 7-th dimension, while the other feathres $W_i$ on the other side of <span style="color: mediumblue">$W_7$</span> will tilt towards a smaller value in the 7-th dimension. To illustrate, let's suppose <span style="color: mediumblue">$W_7$</span> is a mini version of <span style="color: mediumslateblue">$W_6$</span>, i.e. <span style="color: mediumblue">$W_7$</span> $ = a \cdot $<span style="color: mediumslateblue">$W_6$</span> for small $a$:
 
 <img src = "../../images/opt_failure/disc_tilted_W6.png" alt="W7 = 0.2 * W6" width="100%">
-*Tilt introduced when W7 = 0.05 * W6*
+*Tilt introduced when W7 = 0.06 * W6*
 
-For a tiny value of $a = 0.05$, we introduced a tiny tilt to the latent hexagon. Both <span style="color: mediumblue">$W_7$</span> and <span style="color: mediumslateblue">$W_6$</span> are now tilting towards the positive <span style="color: mediumblue">$W_7$</span> direction.
+For a tiny value of $a = 0.06$, we introduced a tiny tilt to the latent hexagon. **We limit the tilt such that the entire latent hexagon is still positive in <span style="color: mediumblue">dim-$7$</span>, for our initial analysis.** Both <span style="color: mediumblue">$W_7$</span> and <span style="color: mediumslateblue">$W_6$</span> are now tilting towards the positive direction along the <span style="color: mediumblue">dim-$7$</span> axis. To be more complete, features <span style="color: lightskyblue">$W_5$</span>, <span style="color: mediumslateblue">$W_6$</span>, and <span style="color: firebrick">$W_1$</span> are on the same side of the tilt as <span style="color: mediumblue">$W_7$</span> and are now more positive in the <span style="color: mediumblue">$7$-th dimension</span>, while features <span style="color: darksalmon">$W_2$</span>, <span style="color: peachpuff">$W_3$</span>, and <span style="color: darkgrey">$W_4$</span> are on the other side of the tilt, and have less positive values in the <span style="color: mediumblue">$7$-th dimension</span>. 
+
+Remember that correct value that we would like the model to reconstruct in the <span style="color: mediumblue">$7$-th dimension</span> is $0$ for the first 6 data samples, because each of the first 6 data samples are not supposed to have an activated <span style="color: mediumblue">$7$-th feature</span>. This means that because <span style="color: lightskyblue">$W_5$</span>, <span style="color: mediumslateblue">$W_6$</span>, and <span style="color: firebrick">$W_1$</span> now have a more positive value (further from $0$) in the <span style="color: mediumblue">$7$-th dimension</span>, they are more WRONG, whereas because <span style="color: darksalmon">$W_2$</span>, <span style="color: peachpuff">$W_3$</span>, and <span style="color: darkgrey">$W_4$</span> now have values closer to $0$ in the <span style="color: mediumblue">$7$-th dimension</span>, they are now more CORRECT.
+
+You may think that there is symmetry here - the total additional error incurred (in terms of L2 distance) by the newly upward-tilted features is equal to the error reduced by the newly downward-tilted features - so the overall "correctness" of the untilted model and the tilted model is still the same, but this is not the case. What's happening here is that because our loss (MSE) is convex (specifically quadratic), the additional error incurred by the upward-tilted features is larger than the error reduced by the newly downward-tilted features. We can sketch out a quick proof by looking at the loss changes incurred by <span style="color: mediumslateblue">$W_6$</span> and its mirror, <span style="color: peachpuff">$W_3$</span>:
+
+$$
+\begin{align*}
+\text{Old Loss} &= \text{Old Loss}_{W_6} + \text{Old Loss}_{W_3} \\
+& = 2 b_7^2 \\
+\text{New Loss} &= \text{New Loss}_{W_6} + \text{New Loss}_{W_3} \\ 
+& = (b_7 + \Delta)^2 + (b_7 - \Delta)^2 \\
+& = 2 b_7^2 + 2 \Delta^2 > 2 b_7^2
+\end{align*}
+$$
+
+This is simply Jensen's Inequality at work. Again, convexity gives us the standard result of L2-regression (OLS regression) preferring mean values. **The consequence: any tilt will incur more loss and the model will learn to correct it by preferring to set <span style="color: mediumblue">$W_7$</span> back to $0$.** You can also calculate the gradients of the loss of each of the reconstructed data samples $\hat{y}^{(i \neq 7)}$ with respect to <span style="color: mediumblue">$W_7$</span> and observe that it will always point in the <span style="color: mediumblue">$W_7$</span> direction, which means that the update will be in the direction of <span style="color: mediumblue">$-W_7$</span>.
+
+### When can the gradient favor more tilt after Symmetric Failure has happened?
+
+In the previous section, we showed that by considering the other 6 features (i.e. $W_{i \neq 7}$), less tilt is always desired. However, we did not consider the error reduced by the newly learnt, non-$0$ value of <span style="color: mediumblue">$W_7$</span>. In particular, we are interested to see if the error reduced for <span style="color: mediumblue">feature 7</span> can compensate for the overall increase in error for the other 6 features caused by the tilt, and if so, under what circumstances. Because if there are scenarios where it can compensate for the tilt - and of course there must be, how else can Perfect Optimization happen? - then we will have understood a mechanism for avoiding Symmetric Failure well. Be warned, a lot of this is just banging out the math.
+
+Let's look at the gradient of the loss of the reconstruction of data sample <span style="color: mediumblue">$x_7$</span> w.r.t <span style="color: mediumblue">$W_7$</span>:
+
+$$
+\begin{align*}
+\frac{\partial \mathcal{L} (x_7)}{\partial W_7} & = \left( \hat{y}^{(7)} - y^{(7)}\right) \cdot \mathbb{1} \left\{ W^\top W x_7 + b > 0 \right\} \cdot \frac{\partial (W^\top W x_7 + b) }{\partial W_7} \\
+& = \left( \hat{y}^{(7)} - y^{(7)}\right) \cdot \mathbb{1} \left\{ W^\top W_7 + b > 0 \right\} \cdot \frac{\partial (W^\top W_7 + b) }{\partial W_7} \text{, because } x_7 = e_7\\
+
+& = \left( \hat{y}^{(7)} - y^{(7)}\right) \cdot 
+\begin{bmatrix}
+0 \\ 0 \\ \vdots \\ 0 \\ \vdots \\ 1
+\end{bmatrix}
+\cdot 
+\begin{bmatrix}
+\text{don't care} \\
+\text{don't care} \\
+\vdots \\
+\text{don't care} \\
+\vdots \\
+\frac{\partial (W_7^\top W_7 + b_7) }{\partial W_7}
+\end{bmatrix} \text{, because the other 6 features don't activate} \\
+
+& = 
+\begin{bmatrix}
+\text{don't care} \\
+\text{don't care} \\
+\vdots \\
+\text{don't care} \\
+\vdots \\
+\left( \text{ReLU} \left( W_7^\top W_7 + b_7\right) - 1\right) 
+\end{bmatrix}
+\cdot 
+\begin{bmatrix}
+\text{don't care} \\
+\text{don't care} \\
+\vdots \\
+\text{don't care} \\
+\vdots \\
+2W_7
+\end{bmatrix} \\
+
+& = 2 \left( \text{ReLU} \left( \|W_7\|_2^2 + b_7\right) - 1\right) \cdot W_7 \\
+& = 2 \left( \|W_7\|_2^2 + b_7 - 1\right) \cdot W_7 \text{ (can drop ReLU as entire latent shape is > 0 in dim 7)}
+\end{align*} \\
+
+$$
+
+And let's also look at the gradient of the loss of the reconstruction of another data sample (not <span style="color: mediumblue">$x_7$</span>), call it sample $x_j$ (where $j \neq 7$) w.r.t <span style="color: mediumblue">$W_7$</span>:
+
+$$
+\begin{align*}
+\frac{\partial \mathcal{L} (x_j)}{\partial W_7} & = \left( \hat{y}^{(j)} - y^{(j)}\right) \cdot \mathbb{1} \left\{ W^\top W x_j + b > 0 \right\} \cdot \frac{\partial (W^\top W x_j + b) }{\partial W_7} \\
+& = \cdots \\
+& = \left( \text{ReLU} \left( W_7^\top W_j + b_7\right) - 0\right) \cdot W_j \\
+& = \left( W_7^\top W_j + b_7\right) \cdot W_j \text{ (likewise, can drop ReLU)}
+\end{align*}
+$$
+
+The sum of these gradients from all 6 $x_{j \neq 7}$ is hence:
+
+$$
+\begin{align*}
+\sum_{j \neq 7} \frac{\partial \mathcal{L} (x_j)}{\partial W_7} & = \sum_j \left( W_7^\top W_j + b_7\right) \cdot W_j \\
+\end{align*}
+$$
+
+There's actually a rather neat way to simplify this, and it hinges on the fact that the features $W_{j \neq 7}$ are arranged in a symmetric fashion, where the <span style="color: mediumblue">$W_7$</span> line is the line of symmetry. This means that all the components of gradients that are orthogonal to the <span style="color: mediumblue">$W_7$</span> direction will all cancel each other out. For example, if <span style="color: mediumblue">$W_7$</span> is "front" to us, then the left-ward direction of <span style="color: mediumslateblue">$\frac{\mathcal{L} x_6}{W_7}$</span> will cancel out the right-ward direction of <span style="color: firebrick">$\frac{\mathcal{L} x_1}{W_7}$</span>. Likewise, the left-ward direction of <span style="color: darkgrey">$\frac{\mathcal{L} x_4}{W_7}$</span> will cancel out the right-ward direction of <span style="color: darksalmon">$\frac{\mathcal{L} x_2}{W_7}$</span>. This means that we only have to consider the "front-back" <span style="color: mediumblue">($W_7$)</span> component of all these gradients, i.e. we can work with only the projections of these gradients onto <span style="color: mediumblue">$W_7$</span>.
+
+$$
+\begin{align*}
+\sum_{j \neq 7} \frac{\partial \mathcal{L} (x_j)}{\partial W_7} & = \sum_{j \neq 7} \left( W_7^\top W_j + b_7 \right) \cdot \hat{W}_7^\top W_j \cdot \hat{W}_7 \text{, by projecting } W_j \text{ to } W_7  \\
+& = \sum_{j \neq 7} \left\{ \left(W_7^\top W_j\right) \cdot \hat{W}_7^\top W_j + b_7 \cdot \hat{W}_7^\top W_j \right\} \cdot \hat{W}_7 \\
+& = \sum_{j \neq 7} \left \{ \|W_7\|_2 \left( \hat{W}_7^\top W_j\right)^2 + b_7 \cdot \hat{W}_7^\top W_j\right\} \cdot \hat{W_7} \\
+& = \hat{W}_7 \cdot \sum_{j \neq 7} \left\{ \|W_7\|_2 \left( \hat{W}_7^\top W_j\right)^2 \right\} + \hat{W}_7  \cdot \sum_{j \neq 7} \left\{ b_7 \cdot \hat{W}_7^\top W_j\right\} \\
+& = \hat{W}_7 \cdot \sum_{j \neq 7} \left\{ \|W_7\|_2 \left( \hat{W}_7^\top W_j\right)^2 \right\} \text{, because all } W_j \text{ cancel out} \\
+& = W_7 \cdot \sum_{j \neq 7} \left( \hat{W}_7^\top W_j\right)^2
+\end{align*}
+$$
+
+I find this simplified form appallingly... simple; great because it significantly simplifies our calculations. So in order for us to favor tilt, the update has to be in the <span style="color: mediumblue">$W_7$</span> direction, which means the gradient has to be in the <span style="color: mediumblue">$-W_7$</span> direction, which means that:
+
+$$
+\begin{align*}
+\frac{\partial \mathcal{L} (x_7)}{\partial W_7} + \sum_{j \neq 7} \frac{\partial \mathcal{L} (x_j)}{\partial W_7} & = (< 0) \cdot W_7 \\
+2 \left( \|W_7\|_2^2 + b_7 - 1\right) \cdot W_7 + W_7 \cdot \sum_{j \neq 7} \left( \hat{W}_7^\top W_j\right)^2 & = (< 0) \cdot W_7 \\
+2 \left( \|W_7\|_2^2 + b_7 - 1\right) + \sum_{j \neq 7} \left( \hat{W}_7^\top W_j\right)^2 & < 0 \\
+2 \left[ 1 - \left( \|W_7\|_2^2 + b_7 \right) \right] & > \sum_{j \neq 7} \left( \hat{W}_7^\top W_j\right)^2
+\end{align*} \\
+$$
+
+Without having to write out too much further math, we can see that this is impossible for any non-0 value of $W_7$. How? We simply observe that:
+* Both sides are quadratic in $W_7$, which means the overall shape of $LHS - RHS$ is also quadratic.
+* Since we are analyzing the regime where the entire latent hexagon is positive in <span style="color: mediumblue">dimension $7$</span>, that also means that <span style="color: mediumblue">$b_7 > 0$</span>. That means the maxmum value of $LHS$ is just $2$. In particular, to maximize the $LHS$, we want to minimize <span style="color: mediumblue">$\|W_7\|_2$</span>, and to minimize the $RHS$, we also want to minimize <span style="color: mediumblue">$\|W_7\|_2$</span>. **Both sides will contribute optimization pressure to force <span style="color: mediumblue">$W_7$</span> to $0$.**
+
+### What if Symmetric Failure and $b_7 = 0$?
+
+Very briefly, we can extend our intuition from the previous section to make conclusions for the case of Symmetric Failure and $b_7 = 0$. Most notably, this means that the latent hexagon is pivoted on the dim-$7 = 0$ hyperplane, such that if there is a tilt, half of the latent hexagon will tilt upwards, while the other half will tilt under dim-$7 = 0$. 
+
+<img src = "../../images/opt_failure/disc_zero_dim7.png" alt="disc zero dim7" width="100%">
+*Tilted latent hexagon at b7 = 0*
+
+
+This is significant because the half that is in the negative region (in dim-$7$) will be "deactivated" by ReLU (i.e. set to $0$). This impacts $\mathcal{L}(x_{j \neq 7})$, where $j$ are the indices of the features that are negative in dim-$7$, because they are now $0$. This means that the model now has no loss for samples <span style="color: darksalmon">$x_2$</span>, <span style="color: peachpuff">$x_3$</span>, and <span style="color: darkgrey">$x_4$</span>, hence these samples no longer exert any optimization pressure to "untilt" the latent hexagon, but the other samples still exert that same untilting optimization pressure. The above calculation will still hold, just that there are now only half the number of $W_j$'s.
+
+So now, **we conclude that when <span style="color: mediumblue">$b_7 \geq 0$</span> and we're in the Symmetric Failure case**, we're stuck. Constrained to  <span style="color: mediumblue">$b_7 \geq 0$</span>, **this is the best we can do.**
+
+## What if $b_7 < 0$?
