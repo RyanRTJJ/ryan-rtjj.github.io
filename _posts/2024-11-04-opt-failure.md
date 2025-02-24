@@ -312,7 +312,7 @@ To fully appreciate why the activation zones are as such, I illustrate the laten
 
 I've also highlighted the <span style="color: royalblue">activation zone of the $z$-th feature</span>, which is simply the part of the latent space with <span style="color: royalblue">$z > 0$</span>. It is now also obvious that **the $z$-th value of the bias is the lever which controls where that blue sliver starts**. A $b_z$ that is more negative means that the latent hexagon is pushed down further along the $z$-axis, meaning that the sliver of the hexagon that satisfies $z > 0$ starts further up the hexagon. Conversely, a less negative $b_z$ means that the hexagon will be situated further up the $z$-axis, meaning that the sliver of the hexagon that satisfies $z > 0$ will start nearer the bottom of the hexagon.
 
-# Optimization Failure Examples
+# Optimization Failure Mode 1: Symmetric Failure
 There are only a few ways optimization can fail for this toy model. Let's take a look at what the first way looks like - I'll call it the "Symmetric Failure" mode.
 
 <img src = "../../images/opt_failure/symmetric_failure_1.png" alt="Symmetric Failure 1" width="100%">
@@ -517,4 +517,106 @@ This is significant because the half that is in the negative region (in dim-$7$)
 
 So now, **we conclude that when <span style="color: mediumblue">$b_7 \geq 0$</span> and we're in the Symmetric Failure case**, we're stuck. Constrained to  <span style="color: mediumblue">$b_7 \geq 0$</span>, **this is the best we can do.**
 
-## What if $b_7 < 0$?
+# Asymmetric Recovery
+
+We have since found that once we've reached Symmetric Failure, assuming that the learnt $W_i$'s are all symmetric (equal magnitude and equally spaced apart in a circle), and $b_\text{unlearnt} \geq 0$, we're kind of stuck. Let's move on to the next mode of behavior and see what happens when the symmetric constraint on $W_i$'s is broken, and how that might happen in the first place.
+
+To quickly describe, **Asymmetric Recovery** happens when we reach Symmetric Failure, but at some point, the $W_\text{learnt}$'s begin to skew such that one side has much larger features than the other, the $b_\text{learnt}$'s begin to become much more negative, and then $W_\text{unlearnt}$ and $b_\text{learnt}$ finally get learnt, achieving a 0-loss model.
+
+
+<img src = "../../images/opt_failure/asymmetric_failure_1.png" alt="Symmetric Failure Reached" width="100%">
+*Symmetric Failure Reached*
+
+<img src = "../../images/opt_failure/asymmetric_failure_2.png" alt="Skew begins to show" width="100%">
+*Skew begins to show*
+
+<img src = "../../images/opt_failure/asymmetric_failure_3.png" alt="W7 increasing and b7 decreasing" width="100%">
+*W7 increasing and b7 decreasing*
+
+<img src = "../../images/opt_failure/asymmetric_failure_4.png" alt="Asymmetric Recovery achieved" width="100%">
+*Asymmetric Recovery achieved*
+
+> Note that the color mappings between these 'training progress' plots and the latent visualization plots are different, simply because I can't tell ahead of time (without excessively more code to write) which feature will be the unlearnt feature, and hence which feature to color dark blue.
+
+Let's try to make sense of what's going on at the skew stage. The skew stage is characterized by elongating learnt feature vectors $W_\text{learnt}$ as well as $b_\text{learnt}$ values that get increasingly negative (except for the initial increase for a number of that). The fact that these 2 behaviors happen simultaneously makes sense to me.
+
+<img src = "../../images/opt_failure/asymmetric_recovery_skew_stage.png" alt="Skew stage" width="100%">
+*Skew stage*
+
+If you look at the right view of the latent shape, you can realize that, for example, as <span style="color: lightskyblue">$b_5$</span> gets increasingly negative, the latent shape will shift in the negative direction in <span style="color: lightskyblue">dim-$5$</span>. This means that to preserve the activation sliver for <span style="color: lightskyblue">feature $5$</span>, <span style="color: lightskyblue">$W_5$</span> has to be longer such that it can still reach the positive region in <span style="color: lightskyblue">dim-$5$</span>.
+
+Remember that the goal of the reconstruction of each feature is to have the model output a $1$ whenever that feature is supposed to be active. This affects the extent to which $W_i$ must protrude into the positive region of dim-$i$, because:
+
+$$
+x'_i = \text{ReLU} (W_i^\top W_i - b_i)
+$$
+
+Because <span style="color: mediumslateblue">$b_6$</span> and <span style="color: firebrick">$b_1$</span> are less negative (smaller magnitude), <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> are also shorter. This asymmetry is important because it actually helps us favor the forces that generate the tilt in <span style="color: mediumblue">dim-$7$</span>. Remember that the sum of all the data sample errors w.r.t to <span style="color: mediumblue">$W_7$</span> is:
+
+$$
+\begin{align*}
+\sum_{j \neq 7} \frac{\partial \mathcal{L} (x_j)}{\partial W_7} & = \sum_j \left( W_7^\top W_j + b_7\right) \cdot W_j \\
+\end{align*}
+$$
+
+In the Symmetric Failure case, we could appeal to arguments of symmetry to say that the total uptilt introduced is equal to the total downtilt introduced, but because of convexity, bla-bla-bla, the total gradient points in the <span style="color: mediumblue">$W_7$</span> direction, which makes the update favor untilting. However, now, the vectors on the opposite side of <span style="color: mediumblue">$W_7$</span> (negative $W_7^\top W_j$) are significantly longer than those on the same side of <span style="color: mediumblue">$W_7$</span> (positive $W_7^\top W_j$). This overcomes the tendency towards untilting induced by the convexity of MSE, and allows the total gradient to point in the <span style="color: mediumblue">$-W_7$</span> direction, and for the update to favor tilting! 
+
+At some point, the plane tilts so much that some of the features $W_{j \neq 7}$ begin to dip into the negative <span style="color: mediumblue">dim-$7$</span> region. This means that the loss incurred by those corresponding data samples become $0$.
+
+<img src = "../../images/opt_failure/asymmetric_recovery_half_zero.png" alt="Some features (W3, W4) achieve 0 loss in dim-7" width="100%">
+*Some features (W3, W4) achieve 0 loss in dim-7*
+
+This is not convenient for us because we have fewer contributors to the tilting force. At some point, all the learnt features $W_{j \neq 7}$ on the *other side* of <span style="color: mediumblue">$W_7$</span> (i.e. negative dot product with <span style="color: mediumblue">$W_7$</span>) will be in the negative <span style="color: mediumblue">dim-$7$</span> region, generating no more loss. The only features generating loss left will be the features on the same side of <span style="color: mediumblue">$W_7$</span> (<span style="color: mediumslateblue">$W_6$</span>, <span style="color: firebrick">$W_1$</span>), and <span style="color: mediumblue">$W_7$</span> itself. Except for <span style="color: mediumblue">$W_7$</span>, the other features will generate an untilting force, which will easily outweigh the tilting force generated by <span style="color: mediumblue">$W_7$</span>. The fact that <span style="color: mediumblue">$W_7$</span> can continue to lengthen and generate more tilt can only be due to the momentum of the optimizer (Adam / AdamW).
+
+> Should I prove it empirically here by continuing training from this checkpoint without the optimizer?
+
+## How does one side magically start to elongate?
+
+If we consider only the 6 learnt features, we have already achieved a 0-loss solution; the 6 features are equally spaced out on a wheel, and have more or less the same magnitude. The fact that there is a "skew" that is being introduced, and that the skew always "sweeps" the learnt feature vectors to the opposite side of the unlearnt feature (<span style="color: mediumblue">$W_7$</span>), can only mean that this is due to either <span style="color: mediumblue">$W_7$</span> or <span style="color: mediumblue">$b_7$</span>.
+
+### Small asymmetry in Symmetric Failure?
+
+It is a fact that <span style="color: mediumblue">$W_7$</span> is never truly exactly $0$, because gradient descent is a numerical method; it is merely just hovering around $0$. The same goes for the other feature vectors $W_{j \neq 7}$. In fact, it is also true that the "Symmetric Failure" case does not have to be exactly symmetric. We can introduce a subtle asymmetry and still achieve 0 loss.
+
+Suppose we introduce a perturbation such that <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> are now both a tiny bit shorter than the other $W_{j \neq 7}$. Now we'll have some loss, because the activations for features <span style="color: mediumslateblue">$6$</span> and <span style="color: firebrick">$1$</span> are not as strong, and there's interference. This triggers a series of updates that will cascade the loss from one side (the side of <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span>) the other side of the latent space:
+1. Because of insufficient activation of features <span style="color: mediumslateblue">$6$</span> and <span style="color: firebrick">$1$</span>, the model would update itself and try to **elongate <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> and decrease <span style="color: mediumslateblue">$b_6$</span> and <span style="color: firebrick">$b_1$</span>**. 
+2. Because features <span style="color: mediumslateblue">$6$</span> and <span style="color: firebrick">$1$</span> are also now interfering with each other, the update will also want to **push <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> away from each other**.
+3. This causes features <span style="color: mediumslateblue">$6$</span> and <span style="color: firebrick">$1$</span> to now interfere with features features <span style="color: lightskyblue">$5$</span> and <span style="color: darksalmon">$2$</span> respectively, so the same updates of pushing <span style="color: lightskyblue">$W_5$</span> and <span style="color: darksalmon">$W_2$</span> away (move to the right side) and outward (elongate) will happen.
+4. By the same mechanism, these updates will cascade all the way to all the features on the opposite of the latent space.
+
+Pictorially:
+
+<img src = "../../images/opt_failure/construct_asymmetry_1.png" alt="constructing asymmetry" width="100%">
+*Constructing a slightly asymmetric, 0 loss solution*
+
+This type of "skewing" of the feature vectors towards one side would also happen if instead of <span style="color: mediumblue">$W_7$</span> being slightly shorter, <span style="color: mediumblue">$b_7$</span> were more positive (because the same effects of insufficient activation and interference would happen). Here's one such "slightly asymmetric" solution - notice how the feature vectors seem to be more splayed out on the left side, and more elongated on the right side, as if there's a repulsor on the left and an attractor on the right:
+
+<img src = "../../images/opt_failure/construct_asymmetry_2.png" alt="constructing asymmetry" width="100%">
+*One such slightly asymmetric, 0 loss solution*
+
+We've now observed that any small perturbation in weights near the Symmetric Failure scenario results a series of small updates (skewing features to one side) to quickly re-establish 0 loss. There's clearly no "run-away" or self-reinforcing mechanism that would cause the skewing action to keep happening to the extent that it does in "Asymmetric Recovery" - what gives?
+
+## What on earth is special about this?
+
+$$
+W = 
+\begin{bmatrix}
+-1.1598 & 0.80095 \\
+0.12533 & 1.4152 \\
+1.2847 & 0.60707 \\
+1.1733 & -0.80187 \\
+-0.0017641 & 0.00014513 \\
+1.2715 & -0.60815 \\
+-0.09899 & -1.4176
+\end{bmatrix},
+b = 
+\begin{bmatrix}
+-0.9873 \\
+-1.0193 \\
+-1.0198 \\
+-1.0202 \\
+ 0.1429 \\
+-0.9871 \\
+-1.0199
+\end{bmatrix}
+$$
