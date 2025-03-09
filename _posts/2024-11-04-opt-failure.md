@@ -312,6 +312,21 @@ To fully appreciate why the activation zones are as such, I illustrate the laten
 
 I've also highlighted the <span style="color: royalblue">activation zone of the $z$-th feature</span>, which is simply the part of the latent space with <span style="color: royalblue">$z > 0$</span>. It is now also obvious that **the $z$-th value of the bias is the lever which controls where that blue sliver starts**. A $b_z$ that is more negative means that the latent hexagon is pushed down further along the $z$-axis, meaning that the sliver of the hexagon that satisfies $z > 0$ starts further up the hexagon. Conversely, a less negative $b_z$ means that the hexagon will be situated further up the $z$-axis, meaning that the sliver of the hexagon that satisfies $z > 0$ will start nearer the bottom of the hexagon.
 
+I'd also like to point out that the amount of reconstruction a feature gets is hence determined by how much the feature vector extends into its corresponding latent zone:
+
+<img src = "../../images/opt_failure/illustrate_activation.png" alt="Amount of activation must be equivalent to reconstruction of the feature" width="500px">
+*Amount of activation must be equivalent to reconstruction of the feature*
+
+So, in response to whether or not optimization pursues linear separability, the answer is **yes, but there's a lot more nuance to it than is let on by Olah's and Henighan's illustration**, which I paste below again:
+
+<img src = "../../images/opt_failure/olah_henighan_2.png" alt="Olah Henighan 2" width="600px">
+
+The dotted line linearly separates the one short feature from the rest, yes, but in a rather abitrary way, and doesn't illustrate how much linear separation is enough, and the point at which linear separation starts to count. Applying our intuition of latent zones and activation amount, we can draw in the real line of separation, which is also where the latent zones start. I've drawn one for a <span style="color: indianred">short feature</span> and one for a <span style="color: blue">long feature</span>:
+
+<img src = "../../images/opt_failure/olah_henighan_3.png" alt="Olah Henighan 3" width="300px">
+
+> You may notice that the activation amount for the long feature seems much less than the activation amount for the short feature - doesn't this mean that the reconstructed value for the <span style="color: blue">long feature</span> is less than the reconstructed value of the <span style="color: indianred">short feature</span>? E.g., if distance annotated by the red double-ended arrow correspond to a reconstructed value of $1$, wouldn't the distanced annotated by the blue arrow correspond to a value of much less than $1$? This is a great observation, but keep in mind that the reconstructed value of feathre $i$ is merely the extent to which feature vector $i$ is in the latent zone, in ***the $i$-th dimension***. In a perfectly symmetric latent set-up, the latent plane is tilted equally in all dimensions, but in this asymmetric set-up, the latent plane is tilted much more in the dimensions of the <span style="color: blue">long features</span> (i.e. much more parallel to the <span style="color: blue">long features</span>). You will get a more complete picture of "tilt" in the coming sections.
+
 # Optimization Failure Mode 1: Symmetric Failure
 There are only a few ways optimization can fail for this toy model. Let's take a look at what the first way looks like - I'll call it the "Symmetric Failure" mode.
 
@@ -411,6 +426,8 @@ This is simply Jensen's Inequality at work. Again, convexity gives us the standa
 ### When can the gradient favor more tilt after Symmetric Failure has happened?
 
 In the previous section, we showed that by considering the other 6 features (i.e. $W_{i \neq 7}$), less tilt is always desired. However, we did not consider the error reduced by the newly learnt, non-$0$ value of <span style="color: mediumblue">$W_7$</span>. In particular, we are interested to see if the error reduced for <span style="color: mediumblue">feature 7</span> can compensate for the overall increase in error for the other 6 features caused by the tilt, and if so, under what circumstances. Because if there are scenarios where it can compensate for the tilt - and of course there must be, how else can Perfect Optimization happen? - then we will have understood a mechanism for avoiding Symmetric Failure well. Be warned, a lot of this is just banging out the math.
+
+<span style="color: mediumaquamarine">**[Skip to the last paragraph of this section (just before "Asymmetric Recovery") if you don't want to follow the dry math]**</span>
 
 Let's look at the gradient of the loss of the reconstruction of data sample <span style="color: mediumblue">$x_7$</span> w.r.t <span style="color: mediumblue">$W_7$</span>:
 
@@ -576,7 +593,7 @@ If we consider only the 6 learnt features, we have already achieved a 0-loss sol
 
 ### Small asymmetry in Symmetric Failure?
 
-It is a fact that <span style="color: mediumblue">$W_7$</span> is never truly exactly $0$, because gradient descent is a numerical method; it is merely just hovering around $0$. The same goes for the other feature vectors $W_{j \neq 7}$. In fact, it is also true that the "Symmetric Failure" case does not have to be exactly symmetric. We can introduce a subtle asymmetry and still achieve 0 loss.
+It is a fact that the 6 learnt features are never truly symmetric, because gradient descent is a numerical method; it is merely almost exactly symmetric. Some learnt features are slightly shorter than others, but the model can compensate by adjusting the biases and the angles between the features accordingly to compensate. Let's look at how this happens by deliberately introducing some asymmetry.
 
 Suppose we introduce a perturbation such that <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> are now both a tiny bit shorter than the other $W_{j \neq 7}$. Now we'll have some loss, because the activations for features <span style="color: mediumslateblue">$6$</span> and <span style="color: firebrick">$1$</span> are not as strong, and there's interference. This triggers a series of updates that will cascade the loss from one side (the side of <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span>) the other side of the latent space:
 1. Because of insufficient activation of features <span style="color: mediumslateblue">$6$</span> and <span style="color: firebrick">$1$</span>, the model would update itself and try to **elongate <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> and decrease <span style="color: mediumslateblue">$b_6$</span> and <span style="color: firebrick">$b_1$</span>**. 
@@ -589,34 +606,93 @@ Pictorially:
 <img src = "../../images/opt_failure/construct_asymmetry_1.png" alt="constructing asymmetry" width="100%">
 *Constructing a slightly asymmetric, 0 loss solution*
 
-This type of "skewing" of the feature vectors towards one side would also happen if instead of <span style="color: mediumblue">$W_7$</span> being slightly shorter, <span style="color: mediumblue">$b_7$</span> were more positive (because the same effects of insufficient activation and interference would happen). Here's one such "slightly asymmetric" solution - notice how the feature vectors seem to be more splayed out on the left side, and more elongated on the right side, as if there's a repulsor on the left and an attractor on the right:
+This type of "skewing" of the feature vectors towards one side would also happen if instead of <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> being slightly shorter, <span style="color: mediumslateblue">$b_6$</span> and <span style="color: firebrick">$b_1$</span> were more positive (because the same effects of insufficient activation and interference would happen). Here's one such "slightly asymmetric" solution - notice how the feature vectors seem to be more splayed out on the left side, and more elongated on the right side, as if there's a repulsor on the left and an attractor on the right:
 
 <img src = "../../images/opt_failure/construct_asymmetry_2.png" alt="constructing asymmetry" width="100%">
 *One such slightly asymmetric, 0 loss solution*
 
-We've now observed that any small perturbation in weights near the Symmetric Failure scenario results a series of small updates (skewing features to one side) to quickly re-establish 0 loss. There's clearly no "run-away" or self-reinforcing mechanism that would cause the skewing action to keep happening to the extent that it does in "Asymmetric Recovery" - what gives?
+We've now observed that any small perturbation in weights near the Symmetric Failure scenario results a series of small updates (skewing features to one side) to quickly re-establish 0 loss. This is how the model compensates for small asymmetries to arrive at a new loss-less equilibrium. **Though it's great that the model can recover like this, there's unfortunately no "run-away" or self-reinforcing mechanism that would cause the skewing action to keep happening to the extent that it does in "Asymmetric Recovery"** - what gives?
 
-## What on earth is special about this?
+## Small asymmetry favoring tilt
+In the previous section, we examined what happens if there are small asymmetries in the learnt features, and we considered **only** the learnt features and their corresponding training data samples. However, **if we added the unlearnt vector back in, we find that this generates the run-away sweeping effect we are looking for!** Let's start with a Symmetric Failure (with the above subtle asymmetry) set of weights. Note that:
+* <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> are ever so SLIGHTLY shorter, and correspondingly, <span style="color: mediumslateblue">$b_6$</span> and <span style="color: firebrick">$b_1$</span> are more positive (around $\approx -0.988$, while the rest are $-1.02 \sim -1.03$). 
+* <span style="color: darksalmon">$W_2$</span> and <span style="color: lightskyblue">$W_5$</span> are now tilted SLIGHTLY to the right side (**important!**)
+* This set of weights has $\approx 0$ loss on the 6 examples for which the learnt features correspond to.
+
+<img src = "../../images/opt_failure/created_asymmetric_7.png" alt="Example 'Symmetric Failure' with some asymmetry" width="400px">
+*Example 'Symmetric Failure' with some asymmetry*
+
+**The first thing to note that having asymmetry in the 6 learnt vectors induces a new optimum on <span style="color: mediumblue">$W_7$</span> that is not $0$ anymore.** Previously, when the 6 learnt vectors formed a perfectly symmetric hexagon, we could say: if the latent hexagon tilted one way, half of the predictions will have a larger value ($\approx \frac{1}{7} + \Delta$) for the <span style="color: mediumblue">$7$-th logit</span>, while half of the predictions will have a smaller value ($\approx \frac{1}{7} - \Delta$), but since loss (MSE) is convex, the additional loss incurred by the larger values will outweigh the loss savings of the smaller values, hence the system will want to remove tilt.
+
+In this case, notice that:
+* There are more vectors on 1 side (<span style="color: darksalmon">$W_2$</span>, <span style="color: peachpuff">$W_3$</span>, <span style="color: darkgrey">$W_4$</span>,  <span style="color: lightskyblue">$W_5$</span>) than the other (<span style="color: mediumslateblue">$W_6$</span>, <span style="color: firebrick">$W_1$</span>). So, if the tilt is such that the more populous side moves down in <span style="color: mediumblue">dim-$7$</span>, there are more contributors to the loss savings.
+* The vectors on the left side (<span style="color: mediumslateblue">$W_6$</span>, <span style="color: firebrick">$W_1$</span>) are shorter, which means that the $\Delta$ along  <span style="color: mediumblue">dim-$7$</span> incurred by the tilt on each of these 2 vectors is going to be slightly less than those of their opposite vectors.
+
+**These two factors contribute to the loss having a local optimum** at <span style="color: mediumblue">$W_7 = \varepsilon \cdot (W_6 + W_1)$</span>, i.e. **still very near $0$, but shifted somewhere in the <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> direction**. I empirically confirmed this by freezing all the learnt weights and letting <span style="color: mediumblue">$W_7$</span> settle at its local optimum.
+
+The second to note is that **having a non-zero <span style="color: mediumblue">$W_7$</span> now means that the learnt vectors will also want to update in the opposite side of <span style="color: mediumblue">$W_7$</span>**:
 
 $$
-W = 
+\begin{align*}
+\frac{\partial \mathcal{L}(x_7)}{\delta W_{j \neq 7}} & = (x'_7 - x_7) \cdot \mathbb{1} \left\{ W^\top W_j + b > 0 \right\} \cdot \frac{\partial (W^\top W_j + b) }{\partial W_j} \\
+& = 
 \begin{bmatrix}
--1.1598 & 0.80095 \\
-0.12533 & 1.4152 \\
-1.2847 & 0.60707 \\
-1.1733 & -0.80187 \\
--0.0017641 & 0.00014513 \\
-1.2715 & -0.60815 \\
--0.09899 & -1.4176
-\end{bmatrix},
-b = 
-\begin{bmatrix}
--0.9873 \\
--1.0193 \\
--1.0198 \\
--1.0202 \\
- 0.1429 \\
--0.9871 \\
--1.0199
+0 \\ 0 \\ \vdots \\ 0 \\ \vdots \\ W^\top_7 W_j + b_7
 \end{bmatrix}
+\cdot 
+\begin{bmatrix}
+\text{don't care} \\
+\text{don't care} \\
+\vdots \\
+\text{don't care} \\
+\vdots \\
+\frac{\partial (W_7^\top W_j + b_7) }{\partial W_j}
+\end{bmatrix} \text{ (the other 6 features are correctly reconstructed)} \\
+&= (W_7^\top W_j + b_7) \cdot W_7
+
+\end{align*}
 $$
+
+This means that there are 3 forces at play (first 2 described in previous section):
+1. (Due to asymmetry of learnt vectors) insufficient activation for learnt features (updates will favor elongating feature vectors)
+2. (Due to asymmetry of learnt vectors) inteference between learnt features (updates will favor splaying out and sweeping vectors to one side)
+3. (Due to <span style="color: mediumblue">$W_7 \neq 0$</span>) all other features will update in favor of the <span style="color: mediumblue">$-W_7$</span> direction (i.e. also sweep towards <span style="color: mediumblue">$-W_7$</span>)
+I've illustrated what the weight updates look like when we start from this set of weights:
+<video width="100%" controls style="box-shadow: none; -webkit-box-shadow: none;">
+  <source src="../../images/opt_failure/asymmetric_updates.mov" type="video/mp4">
+</video>
+
+> The lengths of the updates can be misleading since I've normalized them such that the biggest update has magnitude 1. In particular, it is not that the updates (`learning_rate * - gradient`) of $W_{j \neq 7}$ are getting larger, but that the dominant update (<span style="color: mediumblue">$W_7$</span>) is decreasing very rapidly, so the others look like they are increasing rapidly in comparison.
+
+We know that the first 2 forces will result in a small amount of splaying / sweeping, but because this splaying / sweeping creates an imbalance (the opposite side of <span style="color: mediumblue">$W_7$</span> is now more populous and longer), this shifts the local optimum of <span style="color: mediumblue">$W_7$</span> even more towards the positive <span style="color: mediumblue">$W_7$</span> direction. This means that the third force, which is function of <span style="color: mediumblue">$W_7$</span>, will increase (since <span style="color: mediumblue">$W_7$</span> is now larger). This causes more sweep, which shifts the local optimum of <span style="color: mediumblue">$W_7$</span> yet again, so on and so forth. This, is the run-away tilting effect we are looking for. Eventually, the skew in vectors is so large that the local optimum for <span style="color: mediumblue">$W_7$</span> basically becomes so positive that it over-activates the <span style="color: mediumblue">$7$-th logit</span> and causes <span style="color: mediumblue">$b_7$</span> to very quickly decrease into being negative, achieving no loss on all data samples (Asymmetric Recovery).
+
+<img src = "../../images/opt_failure/asymmetric_recovery_achieved.png" alt="Asymmetric Recovery Achieved" width="100%">
+*Asymmetric Recovery Achieved (color coding of vectors is different)*
+
+## Asymmetric Recovery is Chaotic
+The real kicker here is that this sort of recovery can happen not only in the subtly asymmetric case, but in the Symmetric Failure case as well - after all, the probability that the 6 learnt vectors ($W_{j \neq 7}$) in the Symmetric Failure case are perfectly symmetric is $0$. so there is **always** some subtle asymmetry. In reality, because our learning algorithm (gradient descent) is iterative, this recovery doesn't happen very much though, because it relies on the learning rate and the specific configuration of asymmetry (which vectors are too long / short, by how much, etc.) to be in a sweet spot. **The closer you are to perfect Symmetry Failure, the more susceptible asymmetric recoverability is to chaotic behavior (critical)**, because gradient descent steps are very likely to change the confluence of factors that give rise to the above 3 forces. Perhaps you took too large a step and now <span style="color: mediumblue">$W_7$</span> has flipped direction, causing the third force to also flip, or perhaps an update to <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> pushed them outwards too far and the local optimum for <span style="color: mediumblue">$W_7$</span> gets set closer to $0$. Perhaps the asymmetry wasn't so fortuitous to begin with (e.g. $W_{j \neq 7}$ were alternatingly short and long). This explains why Asymmetric Recovery is very rare (anecdotally, I trained 100 randomly seeded such auto-encoders and only got 1).
+> In fact, this is general. Knowing whether a model is going to exhibit some behavior (converge, diverge, achieve Asymmetric Recovery) is in general hard to predict for iterative algorithms. I found this blogpost / preprint by Jascha Sohl-Dickstein on [the fractality of neural network training (when plotting whether training converges vs diverges over learning rates)](https://sohl-dickstein.github.io/2024/02/12/fractal.html) to make a lot of sense. His illustrations of the chaotic patterns (it seems more merely chaotic than fractal to me) are particularly relevant to what's going on here. (And of course, I later discovered that he works at Anthropic... another reason to love their research).
+
+The reason I focused on this special case of having 2 adjacent features perturbed is that this is basically rigging the weights such that asymmetries line up with each other (perturbed features are on the same side, and also the same side as <span style="color: mediumblue">$W_7$</span>). It hence offers a good shot of achieving Asymmetric Failure (it is not too near critical points). 
+
+And because seeing is believing, to see the chaotic behavior in our case, we can construct a similar plot of how much splaying / sweeping happens (I'm most interested in this phenomenon because it is a crucial prerequisite to Asymmetric Recovery) over 2 variables: the magnitude of the perturbation to both <span style="color: mediumslateblue">$b_6$</span> and <span style="color: firebrick">$b_1$</span>, and learning rate. The sum of the magnitudes of all the $W_j$ are the metric I plot here as a measure of how much splaying / sweeping there is:
+
+<img src = "../../images/opt_failure/chaos_exp_10000_with_annotations.png" alt="Asymmetric Recovery Achieved" width="100%">
+*Interpret this as 'how much splay / sweep occurs with a certain perturbation introduced to b6 & b1 and at a certain learning rate?'*
+
+We notice two things from this plot:
+- The amount of splaying / sweeping generally increases with learning rate, but starts to get patchy beyond a certain point. This indicates that the ability of a model to achieve splaying / sweeping / Asymmetric Recovery isn't just a question of whether there's a *sufficiently high* learning rate, but rather, if the learning rate in a sweet spot that depends on all other factors (which features are too long / short, which biases are too large / small, by how much, and so on). **This demonstrates the chaotic behavior that we postulate.** I'd like to point out, though, that this seems like very much equivalent to how doing standard Stochastic Gradient Descent (SGD) on a simple convex surface can either converge (learning rate is sufficiently small) or diverge (learning rate too large); in this case, **perhaps our problem isn't chaotic**, but that it's so complex that it effectively requires us to search over an exponential combination of factors - not chaotic, **but impractical.**
+- At a fixed amount of perturbation to <span style="color: mediumslateblue">$b_6$</span> and <span style="color: firebrick">$b_1$</span>, the amount of splaying / sweeping is a function of learning rate. Notice also that at basically 0 perturbation to <span style="color: mediumslateblue">$b_6$</span> and <span style="color: firebrick">$b_1$</span>, we still see some amount of splaying / sweeping. This reiterates just how much influence SGD has on optimization failure as an iterative algorithm. 
+
+# Bringing It All Together
+
+So far, we have:
+- Illustrated what the latent space of our model looks like, and how there are latent zones, the sizes of which are determined by the need to have "sufficient activation", which
+- Answers the question of what is meant by "Optimization pursues linear separability," and answers the question of why shorter features need to be more widely spaced apart.
+- Understood why Optimization Failure (Symmetric Failure) happens - the local optimality of Symmetric Failure - but that
+- Small fortuitous asymmetries can cause a runaway splaying / sweeping of learnt features to happen, which is a prerequisite for Asymmetric Recovery,
+- which happens when there is so much splaying / sweeping that the local optimum for the unlearnt feature is sufficiently far away from $0$ that it's basically "learnt"
+
+# Avoiding / Correcting Optimization Failure
+
+So then, what next? The ideal next step is obviously to prevent Optimization Failure altogether, but seeing that this phenomenon is chaotic (or at least "non-polynomially complex"), this is basically impossible. The best we can do is to reason probabilistically about the best conditions that we can try to create to avoid or correct Optimization Failure, and this, Anthropic has basically begun to do. In this next section, I will examine their [neuron resampling method](https://transformer-circuits.pub/2023/monosemantic-features#appendix-autoencoder-resampling) to see how well they work, how we may reason theoretically about it, and if we can do better.
