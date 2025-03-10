@@ -9,44 +9,60 @@ math: true
 
 # Introduction
 
-In one of their smaller papers - ["Superposition, Memorization, and Double Descent"](https://transformer-circuits.pub/2023/toy-double-descent/), Anthropic investigated how model features were learnt over time under different dataset size regimes. They trained a toy ReLU autoencoder (a model that compresses an input vector from higher dimensionality to a lower dimensional **latent space** via weight matrix $W$, and then tries to reconstruct it by applying $W^\top$, adding a bias $b$, and finally, $\text{ReLU}$-ing it). They demonstrated that at lower dataset sizes, the model prefers to represent training examples ("memorization"), while at higher dataset sizes, the model prefers to represent features ("generalization"), and the representation of examples is very similar to the representation of features. In particular, we see the beautiful geometric arrangement of examples, where each example is assigned a direction, and the directions are as spaced out as possible in the latent space:
+In one of their smaller papers - ["Superposition, Memorization, and Double Descent"](https://transformer-circuits.pub/2023/toy-double-descent/), Anthropic investigated how model features were learnt over time under different dataset size regimes. They trained a toy ReLU autoencoder (a model that compresses an input vector from higher dimensionality to a lower dimensional **latent space** via weight matrix $W$, and then tries to reconstruct it by applying $W^\top$, adding a bias $b$, and finally, $\text{ReLU}$-ing it). The **main claim of the paper is that at lower dataset sizes, the model prefers to represent training examples ("memorization"), while at higher dataset sizes, the model prefers to represent features ("generalization").**
+
+But! **This post will focus on the representation of features / examples**. In particular, we see the beautiful geometric arrangement of examples, where each example is assigned a direction, and the directions are as spaced out as possible in the latent space:
+
+> In this post, I will treat "examples" and "features" as interchangeable, because I will be using a toy dataset where there will be exactly 1 example of each feature; in that sense, examples are just instances of features.
 
 <img src = "../../images/opt_failure/anthropic_training_hidden_vecs.png" alt="Anthropic training set hidden embeddings">
 *Each vector corresponds to a training example in latent space, over a range of dataset sizes (Anthropic)*
 
-Intuitively, this all makes sense - the model wants to represent what it learns with as little interference as possible, so it tries to space everything out as much as possible in its latent space, but this is way too anthropomorphic and doesn't give us a good enough picture of **why this works, how this works, and the limitations of such models**, which are great toy models for the linear layers that exist in large models.
+Intuitively, this all makes sense - the model wants to represent what it learns with as little interference as possible, so it tries to space everything out as much as possible in its latent space, but appealing to this intuition is way too anthropomorphic and doesn't give us a good enough picture of **why there's this regular geometric arrangement, and when / how this regular geometry is broken**. 
 
-In particular, there are some good questions and spin-off work that were mentioned at the end of the Anthropic post, and this one caught my eye:
+In particular, there are is a spin-off work / question that was mentioned at the end of the Anthropic post, which caught my eye:
 
 <img src = "../../images/opt_failure/anthropic_opt_failure_post.png" alt="Anthropic Optimization Failure post" width="700px">
 *Screenshot of an interesting follow-up work cited by Anthropic*
 
-This is **particularly interesting because I smell bullshit**. Not to shade the researchers (I consider them, Chris Olah in particular, to be some of the best, field-defining interpretability researchers), but because they only offer intuitive explanations without any justification, and this is a question that has many intuitively plausible explanations.
+This post is also mentioned as the "Two Circle" Phenomenon in Anthropic's [Circuits Updates - May 2023](https://transformer-circuits.pub/2023/may-update/index.html#simple-factorization). There are 3 claims here that I think are faulty:
+* The models are organizing points on two circles of different radii. I question both the claims of **"two"** and **"circles"**, explicitly because it does not seem like two is a special number, nor that features are in general arranged as circles, despite how reminiscent of electron / nuclear energy levels this is.
+* The models "fail" to merge the multiple circles - it seems to me that if the model indeed differentiated features into multiple "energy levels" such as these, it is not so much that the model wants to merge the multiple circles, but that the multiple circles is a desirable property.
+* "To ensure points on the smaller circle can be linearly selected, these solutions require a large angular gap at the interface between points on different circles". In general, this seems plausible, but offers very little specificity on what constitutes a large enough phase angle, how linearly separable is considered linearly separable enough, and so on. 
+
+TLDR, I find this spinoff question **particularly interesting because there are obvious unknowns**. Not to shade the researchers (I consider them to be some of the best, field-defining interpretability researchers), but because they only offer intuitive explanations without any justification, for such behavior that could have many intuitively plausible explanations, these claims are particularly feature. In any case, uncovering the mechanical forces behind the geometric arrangement of features and what causes the nice geometry to break in "Optimization Failure" will be illuminating in understanding why models represent features the way they do.
 
 # The Questions
 Based on their very short write-up above, these questions seem natural to investigate:
-- When do points not organize themselves into a circle? By circle, I mean with equal magnitude and equally spaced apart.
-- What are key features of the "Optimization Failure" solution? Is it having multiple circles of different radii? Is it being able to linearly separate each point from the rest of the points?
+- Why do points organize themselves into a circle in the ideal case? By circle, I mean with equal magnitude and equally spaced apart.
+- When do points not organize themselves into a circle?
+- What are key features of the "Optimization Failure" solution? Is it having multiple circles of different radii? How linearly separable must each point be from the rest of the points?
 
-This post will turn into a bit of a rabbit-hole deep-dive, but I hope to put in my most lucid insights that I have managed to hallucinate over the past months, that I believe will be crucial 
+This post will turn into a bit of a rabbit-hole deep-dive, but I hope to put in my most lucid insights that I have managed to hallucinate over the past months, that I believe will be crucial in attaining a good intuition of how models represent features.
 
 # The Problem Set-Up
 
-I'll do a very quick summary of Anthropic's Toy Model set up, and only for the variant I'm interested in. As mentioned, they define a toy ReLU autoencoder that tries to reconstruct $x$, call the reconstruction $x'$, by doing the following:
+### Anthropic's Problem Set-Up
+
+I'll do a very quick summary of Anthropic's Toy Model set up, and only for the variant I'm interested in. As mentioned, they define a toy ReLU autoencoder that tries to reconstruct $x$, call the reconstruction $y$, by doing the following:
 
 $$
-x' = \text{ReLU}(W^\top W x + b)
+y = \text{ReLU}(W^\top W x + b)
 $$
 
-Where $x \in \mathbb{R}^n, W \in \mathbb{R}^{m \times n}$. $n$ refers to the data's dimensionality (**input dimensionality**) and is much higher than $m$, which is the **latent dimensionality** (aka "hidden dimensionality"). We focus on the case of $n = 10,000, m = 2$.
+Where $x \in \mathbb{R}^n, W \in \mathbb{R}^{m \times n}$. $n$ refers to the data's dimensionality (**input dimensionality**) and is much higher than $m$, which is the **latent dimensionality** (aka "hidden dimensionality").
 
 There is also a **sparsity** level of $S = 0.999$, which means that every entry of each data sample has a $0.999$ chance of being $0$, and being uniformly sampled from $(0, 1]$ otherwise. After sampling, these data vectors are **normalized to have magnitude 1**.
 
 Lastly, they define their dataset to have $T$ examples, which is varied from very small ($3$) to very large (million, or infinity, since they generate new data on the fly).
 
+### Our Problem Set-Up
+
+We stick to the same toy model, but focus on the case of $n > 2, m = 2$. We will not have a sparsity parameter, but simply have all data samples be perfectly sparse (1-hot) vectors, and lastly, because we are not investigating memorization vs generalization, we will not have a variable ($T$) number of samples, but just have 1 example per feature (1-hot vector). Essentially, our dataset is the Identity Matrix.
+
 # A More Intuitive Description
 
-Let's break down $x' = \text{ReLU}(W^\top W x + b)$ and get a more intuitive understanding of each of these parts. After all, all linear layers basically follow this form, so an understanding of this will be very powerful.
+Let's break down $y = \text{ReLU}(W^\top W x + b)$ and get a more intuitive understanding of each of these parts. After all, all linear layers basically follow this form, so an understanding of this will be very powerful.
 
 1. $Wx$, also known as $h$, is the latent vector. It is a smaller-dimensional (2D) representation of the data. 
 > **Purpose**: The point of compressing dimensionality is important in learning because it forces the model to learn only the most generalizable features in its training data. If it had unlimited representational dimensions, it would simply memorize the training data. This is not very relevant to our discussion here.
@@ -54,7 +70,7 @@ Let's break down $x' = \text{ReLU}(W^\top W x + b)$ and get a more intuitive und
     <img src = "../../images/opt_failure/pca_like_2d.png" alt="PCA-like 2D" width="100%">
     *How one might represent a 3D dataset in 2D space by projecting it down onto a plane*
 
-2. $W^\top W x$, aka $W^\top h$, is the decoded vector. The decoding operation (applying $W^\top$) simply takes the compressed representation ($h$) and projects it out to the higher dimensional space (same as the input space). Note that even though $W^\top h$ lives in $\mathbb{R}^n$ (a high dimensional space), its effective dimensionality is that of $h$ (2), since no matter how you linearly transform (stretch & scale) a 2-dimensional set of points, you can never make it more than 2-dimensional. **Note**: In real neural networks, the decoding function is not simply a linear function like $W$, but some more expressive non-linear function. The decoding function represents the construction of output features (or in this case, the reconstruction of input features, because the model is trained to reconstruct its inputs) from a more compressed representation ($h$).
+2. $W^\top W x$, aka $W^\top h$, is the decoded vector. The decoding operation (applying $W^\top$) simply takes the compressed 2D representation ($h$) and projects it out to the higher dimensional space (same as the input space). Note that even though $W^\top h$ lives in $\mathbb{R}^n$ (a high dimensional space), its effective dimensionality is that of $h$ (2D), since no matter how you linearly transform (stretch & scale) a 2D set of points, you can never make it more than 2D. **Note**: In real neural networks, the decoding function is not simply a linear function like $W^\top$, but some more expressive non-linear function. The decoding function represents the construction of output features (or in this case, the reconstruction of input features, because the model is trained to reconstruct its inputs) from a more compressed representation ($h$).
 
 3. $\text{ReLU}$, the most exciting part, is the non-linear function that is magically able to extract more dimensions of information than exists in the latent space (2). We will see how this works in a while. Mechanically, $\text{ReLU}$ simply takes the max of $0$ and its input value. It's useful to think of this as clamping values to $> 0$:
 
@@ -81,15 +97,15 @@ So, in the world of linear transformations, one can never extract more dimension
 <img src = "../../images/opt_failure/pca_like_2d.png" alt="PCA-like 2D" width="100%">
 *How one might represent a 3D dataset in 2D space by projecting it down onto a plane*
 
-It follows that when you've compressed a $10,000$-dimensional vector to $2$ dimensions, like Anthropic did in the problem set-up, you would not be able to construct the original vector. However, throw in a non-linearity and some sparsity in your data points and you can actually reconstruct the original training data fairly well, sometimes without any training loss! How does this happen? Let's take a look.
+It follows that when you've compressed a $10,000$-dimensional vector to $2$ dimensions, like Anthropic did in the problem set-up, you would not be able to construct the original vector. **However, throw in a non-linearity and some sparsity in your data points and you can actually reconstruct the original training data fairly well, sometimes without any training loss! How does this happen? Let's take a look.**
 > This discussion will pertain **solely** to the $\text{ReLU}$ non-linearity. The intuition will transfer somewhat to other activation functions, but activation functions have other kinds of inductive biases that will likely cause the representation of features that models end up learning to be different. This is out of the scope of this discussion
 
-We start by considering the dataset. The dataset is incredibly sparse ($S = 0.999$), meaning that on average, about $10$ entries out of the $10,000$ in a single data vector are non-zero. Allowing multiple entries to be non-zero actually imposes several preferential optimization pressures on the model's learning process that **may** be the cause of "Optimization Failure," so to keep things simple, **let's look at the ideal case where on average, only about $1$ entry is active**. That's what Anthropic effectively did anyway, in the paper where they originally discovered the beautiful geometry (I still remember Zac Hatfield-Dodds going "whaaaaaat why are there pentagons here!!") - [Toy Models of Superpositions](https://transformer-circuits.pub/2022/toy_model/index.html). This means that instead of having vectors that point in random direction in space, you essentially have the ***standard basis vectors (axial lines)***: 
+We start by considering the dataset. The dataset is incredibly sparse ($S = 0.999$), meaning that on average, about $10$ entries out of the $10,000$ in a single data vector are non-zero. To keep things simple, **I will use a dataset where each data sample has exactly $1$ active (non-zero) entry**. That's what Anthropic effectively did anyway (by adjusting sparsity such that the $\mathbb{E} (\text{num non-zero features per data sample}) = 1$), in the paper where they originally discovered the beautiful geometry (I still remember Zac Hatfield-Dodds going "whaaaaaat why are there pentagons here!!") - [Toy Models of Superpositions](https://transformer-circuits.pub/2022/toy_model/index.html). This means that instead of having vectors that point in random direction in space, you essentially have the ***standard basis vectors (axial lines)***: 
 
 <img src = "../../images/opt_failure/figure_axis_vectors.png" alt="PCA-like 2D" width="500px">
 *The three axial vectors in 3D space*
 
-I know that we are operating in $10,000$-dimensional space, but we can only focus on the dimensions where there is data with non-zero entries in that dimension. Suppose we have only 3 data points, then we can basically only look at the 3 dimensions where the data points are active in. Let's look at how these 3 'data archetypes' can be represented in a 2D latent space. There are 2 explanations:
+I know that we are operating in high-dimensional input space (e.g. $\mathbb{R}^{10,000}$), but we can only focus on the dimensions where there is data with non-zero entries in that dimension. Suppose we have only 3 data points, then we can basically only look at the 3 dimensions where the data points are active in. Let's look at how these 3 'data archetypes' can be represented in a 2D latent space. There are 2 explanations:
 
 ## Explanation 1: The effective dimensionality of the points is low (2D)
 
@@ -97,7 +113,7 @@ In this case, this is correct. You can observe that the 3 data points (the axial
 
 ## Explanation 2: The ReLU Hypercube
 
-I'm not quite sure how to phrase this as an explanation, but I'll explain the intuition that makes it super clear. I mentioned that a helpful way of thinking about what ReLU does is that it clamps values to be $>= 0$, i.e. that it snaps all points to the edges of the positive half-space (1D) / quadrant (2D) / octant (3D), and so on; I'll call the high-dimensional generalization of this the "ReLU hypercube," because why not. Let's see how this clamping visually looks in 1 to 3 dimensions:
+I'm not quite sure how to phrase this as an explanation, but I'll explain the intuition that makes it super clear. I mentioned that a helpful way of thinking about what ReLU does is that it clamps values to be $\geq 0$, i.e. that it snaps all points to the edges of the positive half-space (1D) / quadrant (2D) / octant (3D), and so on; I'll call the high-dimensional generalization of this the "ReLU hypercube," because why not. Let's see how this clamping visually looks in 1 to 3 dimensions:
 
 <img src = "../../images/opt_failure/relu_1d_2d_3d.png" alt="ReLU clamping" width="600px">
 *Before (left) and after applying ReLU (right)*
@@ -135,7 +151,7 @@ Even though we (and Anthropic) achieve the geometrically perfect solution (the 3
 
 **This is precisely the job of $W$: their columns act as feature vectors, while their rows act as the span of the $m$-dimensional hyperplane in $n$-dimensional space.**
 
-> Note that this description of $W$ is specific to this context where the compression weights $W$ are the same as the decoding weights ($W^\top$). In reality, they are commonly different, and so you have something like $x' = \text{ReLU} (MWx + b)$, hence it would be that the rows of $M$ act as feature vectors.
+> Note that this description of $W$ is specific to this context where the compression weights $W$ are the same as the decoding weights ($W^\top$). In reality, they are commonly different, and so you have something like $y = \text{ReLU} (MWx + b)$, hence it would be that the rows of $M$ act as feature vectors.
 
 # The role of $W$
 
@@ -175,7 +191,7 @@ So, $W$ and $\text{ReLU}$ are definitely not sufficient to account for what Anth
 
 So how on earth does this happen? This is where the bias $b$ comes in. But before that, let's take a quick look at what happens when we try to memorize more than $2m$ $m$-dimensional axial vectors with only an $m$-dimensional latent space.
 
-# Imperfect Reconstruction: $n > 2m$
+# Regular Geometry is Desired When $n > 2m$
 
 When $n > 2m$, the model will still try to learn a $W$ matrix whose columns are geometrically regular. In this case, we'll examine $n = 5, m = 2$. **Aside**: if you tried to project an $n$-dimensional hypercube down to the $m$-dimensional hyperplane in a way that mapped the $n$-dimensional axial lines to the columns of $W$, the $n$-dimensional hypercube would look VERY regular (which is special; any randomly sampled orientation of a hypercube is exceedingly likely to have a 2D projection that looks very asymmetrical). I trained such an autoencoder and got the following columns of $W$ (and plotted the corresponding projection of the implied 5D hypercube):
 
@@ -187,10 +203,10 @@ These five 2D feature vectors, when projected back out to 5D space via $W^\top$,
 Lastly, let's address the intuition for why $W$ is still pressured to space these feature vectors out and achieve that regular geometry. There are some big caveats here that could be the cause(s) of optimization failure; take everything in the next 2 paragraphs at face-value. Remember that the Toy ReLU Autoencoder was trained using the Mean Squared Error (MSE) loss function, which is quadratic:
 
 $$
-\mathcal{L}(W, X) = \frac{1}{|X|} \sum_{x \in X} (x' - x)^2
+\mathcal{L}(W, X) = \frac{1}{|X|} \sum_{x \in X} (y - x)^2
 $$
 
-This means that the greater the extraneous positive entries, the quadratically greater the loss. This makes it prefer evenly spaced out columns of $W$, and here's why. Because angular space is finite, preferentially spacing out any pair of feature vectors will necessarily mean that other pairs of feature vectors will be squeezed closer together. The additional loss incurred by the squeezed vectors will weigh quadratically as much as the loss "saved" by the spaced out vectors, resulting in greater overall loss. This is why $W$ still faces optimization pressure to distribute the error evenly to all feature vectors and achieve that geometric regularity. This is standard behavior whenever you use some sort of convex loss function, which MSE is, but I thought I would just point it out.
+This means that the greater the extraneous positive entries, the quadratically greater the loss. This makes it prefer evenly spaced out columns of $W$, and here's why. Because angular space is finite, preferentially spacing out any pair of feature vectors will necessarily mean that other pairs of feature vectors will be squeezed closer together. The additional loss incurred by the squeezed vectors will weigh quadratically as much as the loss "saved" by the spaced out vectors, resulting in greater overall loss. **This is why $W$ still faces optimization pressure to distribute the error evenly to all feature vectors and achieve that geometric regularity.** This is standard behavior whenever you use some sort of convex loss function, which MSE is, but I thought I would just point it out.
 
 ### Caveat 1: Loss is not actually quadratic, only convex
 
@@ -243,7 +259,7 @@ Henighan starts of by declaring the dataset $X$ the identity matrix, without los
 
 $$
 \begin{align*}
-X' & = \text{ReLU} \left( X W^\top W + b \right)\\
+y & = \text{ReLU} \left( X W^\top W + b \right)\\
 \Rightarrow I &= \text{ReLU} \left( W^\top W + b \right)
 \end{align*}
 $$
@@ -260,7 +276,7 @@ W = \begin{bmatrix} \cos(0) & \cos(\phi) & \cdots & \cos(-\phi) \\
 \end{align*}
 $$
 
-This guess turns out to work in most cases, because of my above explanation on how the partially convex loss function causes $W$ to distribute the total $2 \pi$ radians in a circle over each consecutive pair of vectors as evenly as possible. **(Foreshadow possible optimization failure)**
+This guess turns out to work in most cases, because of my above explanation on how the partially convex loss function causes $W$ to distribute the total $2 \pi$ radians in a circle over each consecutive pair of vectors as evenly as possible.
 
 And so, $W^\top W$ looks like this, after a bunch of massaging with the trigonometric identities:
 
@@ -284,15 +300,15 @@ But since that doesn't look like much, let's look at the matrix in visual form (
 <img src = "../../images/opt_failure/WTW_visual.png" alt="WTW visual" width="400px">
 *A visual depiction of W.T @ W*
 
-I've highlighted the maximum value of each row (column too) in the above image. Remember that because $X' = \text{ReLU}(W^\top W X + b)$, and $X = I$, each row here represent the pre-ReLU, pre-bias representations of each data point. From here, it's obvious that you can just subtract the second-highest value of each row (i.e. $\cos(\phi)$) from every single value, and every row will just have ONE value that is $> 0$ - the blue entries, a.k.a. the diagonal. This explanation works for any $n$, so it will indeed generalize to any $n$. 
+I've highlighted the maximum value of each row (column too) in the above image. Remember that because $Y = \text{ReLU}(W^\top W X + b)$, and $X = I$, each row here represent the pre-ReLU, pre-bias representations of each data point. From here, it's obvious that **you can just subtract the second-highest value of each row (i.e. $\cos(\phi)$) from every single value, and every row will just have ONE value that is $> 0$ - the blue entries, a.k.a. the diagonal. This explanation works for any $n$, so it will indeed generalize to any $n$.**
 
 One small nitpick is that Anthropic said that this set up of embedding $n$-dimensional vectors in $m=2$-dimensional latent space can memorize "**any** number of examples [or features]", but it's obvious here that it's not really **any** number of features; it's just any number that is $\leq n$, because once you have $n + 1$, by the pigeonhole argument, there will be at least 1 unique single value criteria-fulfilling hyperquadrant with more than 1 example / feature vector in it. That said, if you allowed $n$ to increase with your number of examples / features, then it really is infinite. This is where the added requirement of having infinite floating point precision also makes sense, because as $\phi \rightarrow 0$, the difference between $\cos(0) = 1$ and $\cos(\phi)$ also tends to $0$.
 
 ## Cost of absorbing interference: decrease sensitivity
 
-By adjusting $b$ to shift the feature wheel in such a manner, you also notice that the length of the part of each vector that is in the correct unique single value criteria-fulfilling hyperquadrant is also shortened. Visually, you can observe this by noticing that the part of the "positive z" vector that is $> 0$ is only the tip of the vector, and not the full length of it. Same goes for the "positive x" and "positive y" vectors. This means that **for that feature to be reconstructable, the original input's value in that feature needs to be more strongly activated**. A small value of the feature will not be reconstructable because its representation in the latent space is $< 0$ in all dimensions. I find this intuitive - the **bias is commonly explained as a threshold that a neuron needs to be activated beyond in order to make the neuron "fire"**. If it's too weak, the neuron simply won't fire.
+By adjusting $b$ to shift the feature wheel in such a manner, you also notice that the length of the part of each vector that is in the correct unique single value criteria-fulfilling hyperquadrant is also shortened. Visually, you can observe this by noticing that the part of the "positive z" vector that is $> 0$ is only the tip of the vector, and not the full length of it. Same goes for the "positive x" and "positive y" vectors. This means that **for that feature to be reconstructable, the original input's value in that feature needs to be more than a certain threshold**. A small value of the feature will not be reconstructable because its representation in the latent space is $< 0$ in all dimensions. I find this intuitive - the **bias is commonly explained as a threshold that a neuron needs to be activated beyond in order to make the neuron "fire"**. If it's too weak, the neuron simply won't fire.
 
-# Question 1: Does the Optimization Failure solution pursue linear separability?
+# Does the Optimization Failure solution pursue linear separability?
 
 Finally, we have come to the point where we have sufficient intuition to begin investigating Optimzation Failure. The first question we shall investigate is as written in the title of this section. I'm particularly interested in this question because Olah and Henighan claim that in the case of Optimization Failure, "in order for points on the small circle to be linearly separated from points on the large one, there must be a large angular gap."
 
@@ -327,8 +343,8 @@ The dotted line linearly separates the one short feature from the rest, yes, but
 
 > You may notice that the activation amount for the long feature seems much less than the activation amount for the short feature - doesn't this mean that the reconstructed value for the <span style="color: blue">long feature</span> is less than the reconstructed value of the <span style="color: indianred">short feature</span>? E.g., if distance annotated by the red double-ended arrow correspond to a reconstructed value of $1$, wouldn't the distanced annotated by the blue arrow correspond to a value of much less than $1$? This is a great observation, but keep in mind that the reconstructed value of feathre $i$ is merely the extent to which feature vector $i$ is in the latent zone, in ***the $i$-th dimension***. In a perfectly symmetric latent set-up, the latent plane is tilted equally in all dimensions, but in this asymmetric set-up, the latent plane is tilted much more in the dimensions of the <span style="color: blue">long features</span> (i.e. much more parallel to the <span style="color: blue">long features</span>). You will get a more complete picture of "tilt" in the coming sections.
 
-# Optimization Failure Mode 1: Symmetric Failure
-There are only a few ways optimization can fail for this toy model. Let's take a look at what the first way looks like - I'll call it the "Symmetric Failure" mode.
+# Optimization Failure Mode: Symmetric Failure
+There are only a few ways optimization can fail for this toy model. In Olah's and Henighan's screenshot, the model is obviously asymmetrical and turns out, lots of model latents become asymmetrical in Optimization Failure, but it seems to me that all failed models have at some point passed through the "Symmetric Failure" mode before turning asymmetrical. Let's take a look at what this "Symmetric Failure" mode looks like.
 
 <img src = "../../images/opt_failure/symmetric_failure_1.png" alt="Symmetric Failure 1" width="100%">
 *n = 7, m = 2, trained for 25,000 epochs using AdamW*
@@ -384,7 +400,7 @@ Here, we go back to $W^\top W$ and compare how it should ideally look, versus ho
 
 The key observation is that the <span style="color: mediumblue">$7$-th row and column are $0$</span>. This means that the latent shape (in the 7D reconstruction space) does not span the 7-th dimension. This means that **the latent shape has no tilt with respect to the 7-th dimension.**
 
-> **Help:** Do we call this the quotient space (Lantent Plane / $e_7$)?
+> **Help:** Do we call this the quotient space (Latent Plane / $e_7$)?
 
 All of the $W_i$ introduce some tilt to the latent plane with respect to their own dimensions. If <span style="color: mediumblue">$W_7$</span> were to learn some non-zero value, it would introduce a tilt in the 7-th dimension. The simple way to see this is that if <span style="color: mediumblue">$W_7 \neq 0$</span>, then the <span style="color: mediumblue">$7$-th row and column</span> will be various non-$0$ values, which means that the plane given by $W^\top W$ will have some translation in the 7-th dimension, $\Longrightarrow$ tilt.
 
@@ -565,7 +581,7 @@ If you look at the right view of the latent shape, you can realize that, for exa
 Remember that the goal of the reconstruction of each feature is to have the model output a $1$ whenever that feature is supposed to be active. This affects the extent to which $W_i$ must protrude into the positive region of dim-$i$, because:
 
 $$
-x'_i = \text{ReLU} (W_i^\top W_i - b_i)
+y_i = \text{ReLU} (W_i^\top W_i - b_i)
 $$
 
 Because <span style="color: mediumslateblue">$b_6$</span> and <span style="color: firebrick">$b_1$</span> are less negative (smaller magnitude), <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> are also shorter. This asymmetry is important because it actually helps us favor the forces that generate the tilt in <span style="color: mediumblue">dim-$7$</span>. Remember that the sum of all the data sample errors w.r.t to <span style="color: mediumblue">$W_7$</span> is:
@@ -576,16 +592,14 @@ $$
 \end{align*}
 $$
 
-In the Symmetric Failure case, we could appeal to arguments of symmetry to say that the total uptilt introduced is equal to the total downtilt introduced, but because of convexity, bla-bla-bla, the total gradient points in the <span style="color: mediumblue">$W_7$</span> direction, which makes the update favor untilting. However, now, the vectors on the opposite side of <span style="color: mediumblue">$W_7$</span> (negative $W_7^\top W_j$) are significantly longer than those on the same side of <span style="color: mediumblue">$W_7$</span> (positive $W_7^\top W_j$). This overcomes the tendency towards untilting induced by the convexity of MSE, and allows the total gradient to point in the <span style="color: mediumblue">$-W_7$</span> direction, and for the update to favor tilting! 
+In the Symmetric Failure case, we could appeal to arguments of symmetry to say that the total uptilt introduced is equal to the total downtilt introduced, but because of convexity, bla-bla-bla, the total gradient points in the <span style="color: mediumblue">$W_7$</span> direction, which makes the update favor untilting. However, now, the vectors on the opposite side of <span style="color: mediumblue">$W_7$</span> (negative $W_7^\top W_j$) are significantly longer than those on the same side of <span style="color: mediumblue">$W_7$</span> (positive $W_7^\top W_j$). This overcomes the tendency towards untilting induced by the convexity of MSE, and allows the total gradient to point in the <span style="color: mediumblue">$-W_7$</span> direction, and for the update to favor tilting! Another way of phrasing is that **the imbalance of the learnt vectors causes the local optimum of <span style="color: mediumblue">$W_7$</span> to shift away from $0$.**
 
 At some point, the plane tilts so much that some of the features $W_{j \neq 7}$ begin to dip into the negative <span style="color: mediumblue">dim-$7$</span> region. This means that the loss incurred by those corresponding data samples become $0$.
 
 <img src = "../../images/opt_failure/asymmetric_recovery_half_zero.png" alt="Some features (W3, W4) achieve 0 loss in dim-7" width="100%">
 *Some features (W3, W4) achieve 0 loss in dim-7*
 
-This is not convenient for us because we have fewer contributors to the tilting force. At some point, all the learnt features $W_{j \neq 7}$ on the *other side* of <span style="color: mediumblue">$W_7$</span> (i.e. negative dot product with <span style="color: mediumblue">$W_7$</span>) will be in the negative <span style="color: mediumblue">dim-$7$</span> region, generating no more loss. The only features generating loss left will be the features on the same side of <span style="color: mediumblue">$W_7$</span> (<span style="color: mediumslateblue">$W_6$</span>, <span style="color: firebrick">$W_1$</span>), and <span style="color: mediumblue">$W_7$</span> itself. Except for <span style="color: mediumblue">$W_7$</span>, the other features will generate an untilting force, which will easily outweigh the tilting force generated by <span style="color: mediumblue">$W_7$</span>. The fact that <span style="color: mediumblue">$W_7$</span> can continue to lengthen and generate more tilt can only be due to the momentum of the optimizer (Adam / AdamW).
-
-> Should I prove it empirically here by continuing training from this checkpoint without the optimizer?
+This is not convenient for us because we have fewer contributors to the tilting force. At some point, all the learnt features $W_{j \neq 7}$ on the *other side* of <span style="color: mediumblue">$W_7$</span> (i.e. negative dot product with <span style="color: mediumblue">$W_7$</span>) will be in the negative <span style="color: mediumblue">dim-$7$</span> region, generating no more loss. The only features generating loss left will be the features on the same side of <span style="color: mediumblue">$W_7$</span> (<span style="color: mediumslateblue">$W_6$</span>, <span style="color: firebrick">$W_1$</span>), and <span style="color: mediumblue">$W_7$</span> itself. Except for <span style="color: mediumblue">$W_7$</span>, the other features will generate an untilting force, which will easily outweigh the tilting force generated by <span style="color: mediumblue">$W_7$</span>. This initially seemed like it would be a problem, but turns out, by the time this would happen, <span style="color: mediumblue">$W_7$</span> would already have such significant magnitude that the added performance of being able to encode the <span style="color: mediumblue">$7$-th feature</span> would outweigh the slight increase in loss of the features <span style="color: mediumslateblue">$6$</span> and <span style="color: firebrick">$1$</span>.
 
 ## How does one side magically start to elongate?
 
@@ -634,7 +648,7 @@ The second to note is that **having a non-zero <span style="color: mediumblue">$
 
 $$
 \begin{align*}
-\frac{\partial \mathcal{L}(x_7)}{\delta W_{j \neq 7}} & = (x'_7 - x_7) \cdot \mathbb{1} \left\{ W^\top W_j + b > 0 \right\} \cdot \frac{\partial (W^\top W_j + b) }{\partial W_j} \\
+\frac{\partial \mathcal{L}(x_7)}{\delta W_{j \neq 7}} & = (y_7 - x_7) \cdot \mathbb{1} \left\{ W^\top W_j + b > 0 \right\} \cdot \frac{\partial (W^\top W_j + b) }{\partial W_j} \\
 & = 
 \begin{bmatrix}
 0 \\ 0 \\ \vdots \\ 0 \\ \vdots \\ W^\top_7 W_j + b_7
