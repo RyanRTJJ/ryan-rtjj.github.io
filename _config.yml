@@ -21,10 +21,12 @@ timezone: America/Los_Angeles
 
 title: Amagibaba                       # the main title
 
-tagline: Useful musings                # it will display as the sub-title
+tagline: 
+  Elucidate The World
+  ryan.rtjj@gmail.com                # it will display as the sub-title
 
 description: >-                        # used by seo meta and the atom feed
-  A minimal, responsive, and powerful Jekyll theme for presenting professional writing.
+  I write about Mechanistic Interpretability and Statistics.
 
 # fill in the protocol & hostname for your site, e.g., 'https://username.github.io'
 url: ''
@@ -39,7 +41,7 @@ social:
   # Change to your full name.
   # It will be displayed as the default author of the posts and the copyright owner in the Footer
   name: Amagibaba
-  email: ryantjj@cs.stanford.edu        # change to your email address
+  email: ryan.rtjj@gmail.com        # change to your email address
   links:
     # The first element serves as the copyright owner's link
     # - https://twitter.com/username      # change to your twitter homepage

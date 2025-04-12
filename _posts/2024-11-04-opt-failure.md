@@ -483,4 +483,107 @@ So far, we have:
 
 # Avoiding / Correcting Optimization Failure
 
-So then, what next? The ideal next step is obviously to prevent Optimization Failure altogether, but seeing that this phenomenon is chaotic (or at least "non-polynomially complex"), this is basically impossible. The best we can do is to reason probabilistically about the best conditions that we can try to create to avoid or correct Optimization Failure, and this, Anthropic has basically begun to do. In this next section, I will examine their [neuron resampling method](https://transformer-circuits.pub/2023/monosemantic-features#appendix-autoencoder-resampling) to see how well they work, how we may reason theoretically about it, and if we can do better.
+So then, what next? The ideal next step is obviously to **prevent Optimization Failure** altogether, but seeing that this phenomenon is chaotic (or at least "non-polynomially complex"), this is basically **impossible**. The best we can do is to reason probabilistically about the best conditions that we can try to create to avoid or correct Optimization Failure, and this, Anthropic has basically begun to do. In this next section, I will **examine their** [**neuron resampling method**](https://transformer-circuits.pub/2023/monosemantic-features#appendix-autoencoder-resampling) to see how well they work, how we may reason theoretically about it, and **if we can do better**.
+
+## Anthropic's Resampling Procedure
+
+I'll try my best to accurately summarize what Anthropic's resampling method is, which is difficult because of the confusion between the terms "dictionary vector" and "encoder vector," which they do not define explicitly.
+
+First, let's look at their sparse auto-encoder:
+
+$$
+\begin{align*}
+\bar{x} & = x - b_d\\
+f & = \text{ReLU}(W_e \bar{x} + b_e) \\
+\hat{x} & = W_d f + b_d \\
+\end{align*}
+$$
+
+This is very similar to the toy ReLU auto-encoder that we investigated in the post. In particular:
+- $W_e$ is a tall matrix (the SAE has more features than the width of the inputs $x$), and is enclosed by ReLU, which is the same mechanism that gives us "free" dimensions as in the auto-encoder - a projection to a higher-dimensional space followed by $\text{ReLU}$.
+- Just like how our toy ReLU auto-encoder wants to reconstruct the input, so does this SAE.
+
+I'll then lay out the assumption (inferred from their blogpost) that:
+- "Dictionary vector" refers to one column of $W_d$
+- "Encoder vector" refers to one row of $W_e$
+
+And this is their resampling procedure. After some number of training steps, they:
+1. Compute the loss of the current SAE on a random sample of 819,200 $x$'s.
+2. Assign each $x$ a probability of getting selected that is proportional to the square of their loss $\mathcal{L}(x)^2$.
+3. Identify neurons (you can think of a neuron $i$ as the $i$-th row of $W_e$, or the $i$-th column of $W_d$, or the SAE feature vector $(W_e)_i x$) that are dead ($(W_e)_i x = 0$) for the last however arbitrarily many samples of $x$. For each of these dead neurons, call neuron $i$:
+    1. Sample an input according to the probabilities computed in step (2) - i.e., preferentially sample the $x$'s on which the SAE does badly on.
+    2. **Decoder / dictionary:** Normalize the sampled $x$ to get $x_u$, such that $x_u$ has magnitude 1, and set $(W_d)_i = x_u$
+    3. **Encoder:** Renormalize $x$ to get $x_s$, such that $x_s$ such that $\|x_s\| = 0.2 \times \frac{1}{\text{num alive}} \sum_{j}^{\text{num alive}} \|(W_e)_j\|$, and set $(W_e)_i = x_s$.
+    4. Set $(b_e)_i = 0$.
+    5. Reset Adam optimizer parameters for every modified weight and bias to 0.
+
+They claim that "Resetting the encoder norm and bias are crucial to ensuring this resampled neuron will only fire weakly for inputs similar to the one used for its reinitialization."
+
+## Why it works
+
+For openers, let's emphasize that this neuron resampling method does **not** put the neuron's weights in an "ideal" state, as if hand-picking the weights to magically transform Asymmetric Failure to Perfect Symmetry. Training cycles still have to happen after in order to let the model adjust the changed weights and achieve a new, presumably better, optimum.
+
+With that out of the way, we note how the above resampling procedure changes the model.
+
+### Neuron $i$ is Alive
+
+Inputs similar to the one used for neuron $i$'s reinitialization, call $x$, will now no longer be dead. Simply put:
+
+$$
+\begin{align*}
+f_i & = (W_e)_i \bar{x} + 0 > 0 \\
+\hat{x} & = W_d f + b_d \\
+& = (W_d)_i f_i + \sum_{j \neq i} (W_d)_j f_j 
+\end{align*}
+$$
+
+Notice how $f_i > 0$, meaning that the neuron is now firing (no longer dead). And $\hat{x}$ is now closer to $x$. We can observe this by noticing that only the terms ($(W_d)_i, (W_e)_i$) interacting with $f_i$ has changed, and if $(W_d)_i$ is colinear with $x$, which it is, then whereas $(W_d)_i f_i$ used to be $0$, it is now some small multiple of $x$, i.e. closer to $x$. This argument holds true if either $(W_d)_i$ or $(W_e)_i$ is a small multiple of $x$, because otherwise the new $\hat{x}$ could be so large that it is further from $x$ than $0$ is from $x$, which explains the arbitrary $0.2$ multiplier applied in setting $(W_d)_i$.
+
+> In my explanation, I assumed that $\bar{x}$ is "close" to $x$, that I used them interchangeably. In reality, they are probably not that close, and I do not know which one Anthropic is referring to when they say "input vector." I suspect even though $\bar{x}$ and $x$ are not close, the relationship between $\bar{x}$ and $x$ (the shift by $-b_e$) will resemble the relationship between the various $W_i$'s and $b$ in this post, and that there will still be positive dot-product between $\bar{x}$ and $x$, which allows my explanation to still apply.
+
+### Interference is Introduced
+
+Because this procedure magically just assigned $(W_e)_i$ to encode a feature *similar to* $x$, just like how each $W_i$ are assigned to each input feature in this post, there is nothing stopping $(W_e)_i$ from interfering with any number of other rows of $W_e$. In the context of this post, this will look as if we just introduced a full-length <span style="color: mediumblue">$W_7$</span> between <span style="color: mediumslateblue">$W_6$</span> and <span style="color: firebrick">$W_1$</span> such that <span style="color: mediumblue">$W_7$</span> is now in <span style="color: mediumslateblue">$W_6$'s</span> and <span style="color: firebrick">$W_1$'s</span> latent zones. This will cause the **model to adjust in the following ways in the next few iterations:**
+- The rows that $(W_e)_i$ now interferes with splay apart and sweep to other side to reduce interference
+- $(W_e)_i$ itself causes the other features that interfere with it to over-activate and incur more loss, hence the model would want to decrease $(W_e)_i$ to counteract this added loss (this is the "untilting" force in this post)
+- Depending on the value of the new $f_i$, $(b_e)_i$ could have a gradient in either direction
+
+Because the relationship between these forces are quantitatively hard to pin down (there's also learning rate in this mix of factors!), we don't know for sure (or even probabilistically) if the model is going to:
+1. Push $(W_e)_i$ back to its local optimum (which is presumably still near $0$)
+2. Cause the other rows of $W_e$ to splay and sweep and eventually favor a new local optimum for $(W_e)_i$ that would be functionally equivalent to having learnt a new feature ($x$)
+
+This seems to me to be **a clumsy solution**. For sure, option (2) is possible, and if you keep resampling enough, you will definitely learn more and more features, which is why the method achieves positive outcomes. However, **I think a much more elegant solution is to introduce an overall asymmetry to the rows of $W$** the way we perturbed the biases in this post.
+
+## A Possible New Method
+
+In this post, we perturbed the biases $b$ corresponding to features ($W_i$) on the same side of the latent space, in the same direction ($+\Delta$ for both). This **introduced a very consistent direction of asymmetry** into the model's internal features ($W, b$). We also saw that despite the recovery behavior being chaotic, there still exists regions (combinations of $\Delta$ and `learning_rate`) where recovery is overwhelmingly likely, and regions where it is not. We also saw that recovery happened without us having to assign any direction to <span style="color: mediumblue">$W_7$</span> in the sense of explicitly mapping <span style="color: mediumblue">$W_7$</span> to any input. 
+
+This seems to suggest that so long as we can arbitrarily define a repulsor (a direction that features will splay apart or away from) and an attractor (a direction that features will sweep towards), where the repulsor and attractor are colinear but in opposite directions, and seed all the dead neurons (the equivalents of <span style="color: mediumblue">$W_7$</span>) to be ever so slightly positive in the repulsor direction (with some tiny tiny numerical noise to differentiate them), and positively perturb all the biases whose corresponding neurons (rows of $W_e$) have a positive dot-product with the repulsor, **the model will likely splay / sweep all the live neurons apart and recover all the dead features that exist, without us having to do any of paired mappings over $((W_e)_i, (W_d)_i)$ and $x$'s.**
+
+**Explicitly, I hypothesize that this following resampling method will work well:**
+1. Compute the sum of all live neurons $\Sigma = (W_e)_j$. Normalize $\Sigma$ to have magnitude 1. The attractor direction will be $\Sigma$ and the repulsor direction will be $-\Sigma$. 
+2. Set all dead neurons $ (W_{e})_{i} $ to be some small fraction of the average magnitude of all the live neurons:
+$$
+\begin{align*}
+(W_{e})_{i} = 0.05 \times -\Sigma \times \frac{1}{\text{num alive}} \sum_{j}^{\text{alive}} \|(W_e)_j\| + \varepsilon \text{, where } \varepsilon \sim \mathcal{N}(0, \text{very small})
+\end{align*}
+$$
+3. Positively perturb bias entries whose corresponding neurons are on same side of repulsor:
+$$
+\begin{align*}
+(b_e)_j \longrightarrow (b_e)_j + \Delta, \forall j \mid (W_e)_j \cdot -\Sigma > 0
+\end{align*}
+$$
+
+This is better because:
+1. It doesn't require us to do any of paired mappings over $((W_e)_i, (W_d)_i)$ and $x$'s.
+2. We have an understanding that there exist regions of high probability of success, and a simple parameter sweep across $\Delta$ and `learning_rate` will allow us to confidently choose good values for them.
+3. The choice of which features ($x$'s) to recover will not be left to chance - they will be automatically recovered so long as they are "important enough" or mistakes on them are "costly enough," which mimics Anthropic's mechanism of assigning a selection probability to each $x$ that is proportional to their reconstruction loss.
+
+**Overall, it seems like a more elegant solution, and worth experimenting with.** I will, however, not be conducting this experiment in the near future as it's quite a bit of work and I'm at the moment more drawn to the mysterious behaviors of Feature Splitting and Feature Absorption in SAEs. **This is something that I would love to pick back up if anyone would like to be collaborators to work with me though!**
+
+# Closing Words
+
+Surely, this is a kind of investigation that nobody has done or taken the time to pen out, and I hope that if nothing else, you at least got a visual glimpse / intuition into what the latent space of a ReLU model looks like. I think this is the sort of intuition that is very necessary to try at further interpretability problems involving features and optimization pressures that cause features to form or fail to form.
+
+I also wish that I had a comments section so that there could be some feedback, but that is also, *quite a bit of work*. If you've engaged with this post all the way to the end, I'd love to hear what you think - send me an email! &#x1F642;
