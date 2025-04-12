@@ -7,7 +7,7 @@ tags: [mechanistic interpretability]
 math: true
 ---
 
-In my previous post, ["Superposition - An Actual Image of Latent Spaces"](/posts/superposition-an-actual-image-of-latent-spaces/), I illustrate how the parameters of a toy ReLU auto-encoder ($W$, $b$, and $\text{ReLU}$), work together to allow models represent more features than they have latent dimensions and reconstruct said features with no loss. That post ends with an actual plot illustrating the latent zones of such a model, which offers a visualization of what ReLU model latent spaces look like, and crystal clear geometric intuition for why they look the way they do.
+In my previous post, ["Superposition - An Actual Image of Latent Spaces"](/posts/viewing-latent-spaces/), I illustrate how the parameters of a toy ReLU auto-encoder ($W$, $b$, and $\text{ReLU}$), work together to allow models represent more features than they have latent dimensions and reconstruct said features with no loss. That post ends with an actual plot illustrating the latent zones of such a model, which offers a visualization of what ReLU model latent spaces look like, and crystal clear geometric intuition for why they look the way they do.
 
 <img src = "../../images/opt_failure/latent_zone_intro_1.png" alt="Latent zone intro" width="100%">
 
@@ -72,7 +72,7 @@ Moreover, because I don't want the model to prefer learning any feature(s) over 
 
 This is probably the easiest question to answer, and is basically answered the moment we have geometric intuition for what the latent space looks like (highly recommend reading my last post for building this geometric intuition). I'm particularly interested in this question because Olah and Henighan claim that in the case of Optimization Failure, "in order for points on the small circle to be linearly separated from points on the large one, there must be a large angular gap."
 
-To briefly summarize ["Superposition - An Actual Image of Latent Spaces"](/posts/superposition-an-actual-image-of-latent-spaces/), the latent space of such an auto-encoder (and $m=2$-dimensional object (plane) living in $n$-dimensional space), looks like this:
+To briefly summarize ["Superposition - An Actual Image of Latent Spaces"](/posts/viewing-latent-spaces/), the latent space of such an auto-encoder (and $m=2$-dimensional object (plane) living in $n$-dimensional space), looks like this:
 
 <img src = "../../images/opt_failure/latent_zone_intro_1.png" alt="Latent zone intro" width="100%">
 

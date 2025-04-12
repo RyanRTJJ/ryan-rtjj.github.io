@@ -1,5 +1,5 @@
 ---
-published: true
+published: false
 title: Feature Splitting (tmp)
 date: 2025-03-21 00:00:00 -500
 categories: [mechanistic interpretability]

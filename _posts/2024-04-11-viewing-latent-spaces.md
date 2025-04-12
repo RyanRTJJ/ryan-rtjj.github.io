@@ -1,13 +1,13 @@
 ---
 published: true
-title: Superposition - An Actual Image of Latent Spaces
+title: Superposition - An Actual View of Latent Spaces
 date: 2024-11-04 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]
 math: true
 ---
 
-This post is the prequel of the next post, "Optimization Failure," where I investigate how, even in cases where perfectly symmetric, _ideal_ weight configurations exist, ReLU toy models (following [Anthropic's setup](https://transformer-circuits.pub/2022/toy_model/index.html#demonstrating)) may still end up with asymmetric solutions, termed as "Optimization Failure".
+This post is the prequel of the next post, ["Optimization Failure"](/posts/opt-failure/), where I investigate how, even in cases where perfectly symmetric, _ideal_ weight configurations exist, ReLU toy models (following [Anthropic's setup](https://transformer-circuits.pub/2022/toy_model/index.html#demonstrating)) may still end up with asymmetric solutions, termed as "Optimization Failure".
 
 # Introduction
 
