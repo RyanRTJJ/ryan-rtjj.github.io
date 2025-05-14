@@ -15,7 +15,7 @@ This hypothesis of mine is essentially motivated by 2 things:
 1. Anticorrelated features generally do not co-activate. This means that you can train an auto-encoder to encode all of those features in the same low-dimensional latent space and be able to extract them without loss (the really basic Anthropic ReLU Toy Model with one-hot input vectors; since they are one-hot, all the features are mutually sparse).
 2. Once you start adding in density (feature co-activation), auto-encoders generally start preferring PCA solutions, meaning that they will start to learn principle components (orthogonal features) of the dataset.
 
-Findings that correborate my hypothesis:
+Findings that corroborate my hypothesis:
 <img src = "../../images/tegum_factors/sparsity_superposition.png" alt="Features get more PCA-like with more density" width="100%">
 *From [Toy Models of Superpositions, Anthropic](https://transformer-circuits.pub/2022/toy_model/index.html)*
 
