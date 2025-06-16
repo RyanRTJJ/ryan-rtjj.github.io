@@ -1,6 +1,6 @@
 ---
 published: true
-title: Superposition - An Actual View of Latent Spaces
+title: Superposition - An Actual View of Latent Spaces &#x2B50; &#x2B50;
 date: 2024-11-04 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]

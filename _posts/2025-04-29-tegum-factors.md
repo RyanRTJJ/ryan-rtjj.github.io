@@ -33,20 +33,3 @@ While in general, the MLP space is never a perfect Tegum Product of Tegum Factor
 
 <img src = "../../images/tegum_factors/mlp_space_big_tegum_product.png" alt="MLP space is one big tegum product" width="100%">
 *From [Toy Models of Superpositions, Anthropic](https://transformer-circuits.pub/2022/toy_model/index.html#geometry) again*
-
-# How does this help with SAE training?
-Suppose there is some universe of true features, and the universal feature activation $u$ is defined as follows:
-
-$$
-u \in \mathbb{R}^{\texttt{d_u}}
-$$
-
-Further suppose that the MLP activations ($x$) you see are some compression of $u$:
-
-$$
-x = U u, U \in \mathbb{R}^{\texttt{d_mlp} \times \texttt{d_u}}
-$$
-
-Further, without loss of generality, suppose I told you that the first 5 entries of $u$ are compressed into the same tegum factor, and the tegum factor is 3 dimensional. Then, the subspace of this tegum factor is spanned by the first 5 columns of $U$, such that $U_1$ to $U_5$ are the stems of the trigonal bipyramidal polytope (suppose the tegum factor is regular).
-
-I now give you a dataset $X'$ that I tell you is entirely made up of features in this tegum factor. Suppose you follow my intuition of tegum factors having anti-correlated features, and so the dataset $X'$ must be mostly one-hot in the feature basis. Extracting these 5 features is trivial with the L1 loss.

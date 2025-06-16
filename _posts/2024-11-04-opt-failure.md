@@ -1,6 +1,6 @@
 ---
 published: true
-title: Optimization Failure
+title: Optimization Failure &#x2B50;
 date: 2024-11-04 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]
