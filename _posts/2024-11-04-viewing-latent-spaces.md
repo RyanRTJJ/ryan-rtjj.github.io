@@ -65,7 +65,7 @@ Let's dive in! First, let's break down $y = \text{ReLU}(W^\top W x + b)$ and get
     <img src = "../../images/opt_failure/relu_profile.png" alt="Graph of ReLU" width="350px">
     *Graph of the ReLU function*
 
-4. $b$, the bias. The bias is, in my opinion, the most deceptively simple part of the linear layer. Intuitively, it's simple: adding a bias simply shifts everything by an offset. $(W^\top W x + b)$ is basically $W^\top W x$, but $b$ distance away from the origin. But, this bias is incredibly powerful, and without it, the ReLU toy model will be able to encoder much fewer features ($2m$, instead of infinite), as we'll see below. 
+4. $b$, the bias. The bias is, in my opinion, the most deceptively simple part of the linear layer. Intuitively, it's simple: adding a bias simply shifts everything by an offset. $(W^\top W x + b)$ is basically $W^\top W x$, but $b$ distance away from the origin. But, this bias is incredibly powerful, and without it, the ReLU toy model will be able to encode much fewer features ($2m$, instead of infinite), as we'll see below. 
 
 # Why is this toy model worth our time?
 
@@ -327,8 +327,8 @@ In general, this visualization or mental conceptualization of latent spaces as a
 
 **Still, I find this to be an incredibly powerful way to understand latent spaces and the types of compositions of features that are possible.** Here are 3 really compelling examples.
 1. This visualization makes it clear that not only 1-hot features are encodable, but also specific combinations of 2 features!
-2. It also begins to explain why Anthropic observed that ["models prefer to arrange correlated features side by side if they can't be orthogonal"](https://transformer-circuits.pub/2022/toy_model/index.html#geometry): because if 2 features are known to co-activate, having them side-by-side creates a region where their latent zones overlap!
-3. It also begins to explain why Anthropic observed that ["models prefer to represent correlated features in orthogonal dimensions"](https://transformer-circuits.pub/2022/toy_model/index.html#geometry) (if they can): because if 2 features are known to co-activate and aren't side-by-side, then it becomes hard (or impossible) to put those 2 features in the same tegum factor (hexagon in this case) such that you can activate them without activating some 3rd feature. The only way is to have the 2 features be in 2 different tegum factors (orthogonal).
+2. It also begins to explain why Anthropic observed that ["models prefer to arrange correlated features side by side if they can't be orthogonal"](https://transformer-circuits.pub/2022/toy_model/index.html#geometry-organization): because if 2 features are known to co-activate, having them side-by-side creates a region where their latent zones overlap!
+3. It also begins to explain why Anthropic observed that ["models prefer to represent correlated features in orthogonal dimensions"](https://transformer-circuits.pub/2022/toy_model/index.html#geometry-organization) (if they can): because if 2 features are known to co-activate and aren't side-by-side, then it becomes hard (or impossible) to put those 2 features in the same tegum factor (hexagon in this case) such that you can activate them without activating some 3rd feature. The only way is to have the 2 features be in 2 different tegum factors (orthogonal).
 
 <img src = "../../images/tegum_factors/anticorrelated_same_tegum_factor.png" alt="Anti-correlated features prefer being in the same tegum factor" width="100%">
 *From - you guessed it - [Toy Models of Superpositions, Anthropic](https://transformer-circuits.pub/2022/toy_model/index.html#geometry)*
