@@ -71,10 +71,34 @@ where $b_{U,1}$ is the first term of the bias corresponding to Feature Set 2, i.
 
 $$
 \begin{align*}
-(Da) \cdot U_1 + b_{U,1} & > 0 \\
-(U_1^\top D)a + b_{U,1} & > 0 \\
-(U_1^\top D)_1 a_1 + (U_1^\top D)_2 a_2 + \cdots + b_{U,1} & > 0
+(Da + b_\text{D}) \cdot U_1 + b_{U,1} & > 0 \\
+(U_1^\top D)a + U_1^\top b_D + b_{U,1} & > 0 \\
+(U_1^\top D)_1 a_1 + (U_1^\top D)_2 a_2 + \cdots + (U_1^\top D)_5 a_5 + U_1^\top b_{D} + b_{U,1} & > 0
 \end{align*}
 $$
 
-This represents an open half-space where the boundary is a hyperplane in $\mathbb{R}^5$. **Let's call this open half-space $\Pi$.**
+> For the sake of simplicity, we see that the terms $U_1^\top b_{D}$ and $b_{U,1}$ are independent of the activations $a$. So, I will simply forget about $b_{D}$; if it so turns out that $b_{D}$ needs to be non-zero, the model can compensate for this using $b_{U,1}$.
+
+This represents an open rank-5 half-space where the boundary is a 4-dimensional hyperplane in $\mathbb{R}^5$. **Let's call this open half-space $\Pi$.** In addition to this constraint, which I will call **"Constraint Due To $h_1$,"** there are also the constraints that $a \geq 0$ (due to being immediately post-$\text{ReLU}$). I will call these the **"Constraints Due To $\text{ReLU}$."** Together, the region of $a$ that will end up activating $h_1$ become the intersection of 6 half-spaces (1 from Constraint Due To $h_1$, and 5 from Constraints Due To $\text{ReLU}$). Note that this is convex.
+
+## Back Propagating to $\alpha$-space
+
+The key question we are trying to figure out now is: if we wanted to activate feature $i$ in $h$, where in $\alpha$-space must we be? To derive algorithms that'll allow us to compute this, let's walk through a simple example. Instead of modulating between spaces of 2 and 5 dimensions respectively, we'll scale it down to 2 and 3 dimensions, so that we can visualize all the spaces. Suppose we learnt a matrix $U$ containing columns (features $U_1$, $U_2$, $U_3$) that are regularly spaced apart in a wheel, and a $b_U$ vector that is essentially a small negative constant vector. Our $\beta$-space would like this (with the columns of $U$ plotted):
+
+<img src = "../../images/multi_layer_space/beta_space_3_features.png" alt="beta-space with U1, U2, U3" width="100%"> 
+*Beta-space with U1, U2, U3*
+
+Let's add in the decoder features of the previous MLP block (the rows of $D$):
+
+<img src = "../../images/multi_layer_space/beta_space_with_D_3_features.png" alt="beta-space with U, D" width="100%"> 
+*Beta-space with U, D*
+
+> The $D$-vectors can be any arbitrary thing learnt by the model, but for the sake of simplicity and even representation (all regions of the 2D space are in the half-space pointed to by at least one of the $D$ vectors; we'll see why this is important later) I chose the above grey features as my $D$-vectors.
+
+Let's focus on activating <span style="color: blue">$h_1$</span> (i.e. we want to be in the <span style="color: blue">blue zone</span>). This means that the embedding in $\beta$-space must lie in the <span style="color: blue">blue zone</span>, which means that $Da$ must lie in the <span style="color: blue">blue zone</span>. This is merely a recapitulation of **Constraint Due To $h_1$**:
+
+$$
+\begin{align*}
+(Da) \cdot U_1 + b_{U, 1} > 0
+\end{align*}
+$$
