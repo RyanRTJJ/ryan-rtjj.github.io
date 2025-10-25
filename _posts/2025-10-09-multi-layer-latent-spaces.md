@@ -83,7 +83,7 @@ This represents an open rank-5 half-space where the boundary is a 4-dimensional 
 
 ## Back Propagating to $\alpha$-space
 
-The key question we are trying to figure out now is: if we wanted to activate feature $i$ in $h$, where in $\alpha$-space must we be? To derive algorithms that'll allow us to compute this, let's walk through a simple example. Instead of modulating between spaces of 2 and 5 dimensions respectively, we'll scale it down to 2 and 3 dimensions, so that we can visualize all the spaces. Suppose we learnt a matrix $U$ containing columns (features $U_1$, $U_2$, $U_3$) that are regularly spaced apart in a wheel, and a $b_U$ vector that is essentially a small negative constant vector. Our $\beta$-space would like this (with the columns of $U$ plotted):
+The key question we are trying to figure out now is: if we wanted to activate feature $i$ in $h$, where in $\alpha$-space must we be? To derive algorithms that'll allow us to compute this, let's walk through a simple example. Instead of modulating between spaces of 2 and 5 dimensions respectively, we'll scale it down to 2 and 3 dimensions, so that we can visualize all the spaces. Suppose we learnt a matrix $U$ containing columns (features $U_1$, $U_2$, $U_3$) that are regularly spaced apart in a wheel, and a $b_U$ vector that is essentially a small negative constant vector ($\mathbf{-0.5}$). Our $\beta$-space would like this (with the columns of $U$ plotted):
 
 <img src = "../../images/multi_layer_space/beta_space_3_features.png" alt="beta-space with U1, U2, U3" width="100%"> 
 *Beta-space with U1, U2, U3*
@@ -102,3 +102,82 @@ $$
 (Da) \cdot U_1 + b_{U, 1} > 0
 \end{align*}
 $$
+
+Here, we chose $D$ (arbitrarily) to be:
+
+$$
+\begin{align*}
+D = 0.5 \times
+\begin{bmatrix}
+\frac{1}{2} & \frac{1}{2} & -\frac{\sqrt{3}}{2} \\
+\frac{\sqrt{3}}{2} & - \frac{\sqrt{3}}{2} & 0
+\end{bmatrix}
+\end{align*}
+$$
+
+And the decoder parameters $U$ and $b_U$ as shown above is:
+
+$$
+\begin{align*}
+U = 
+\begin{bmatrix}
+1 & 0 \\
+- \frac{1}{2}  & -\frac{\sqrt{3}}{2} \\
+- \frac{1}{2} & \frac{\sqrt{3}}{2} \\
+\end{bmatrix} \text{, }
+b_U =
+\begin{bmatrix}
+-0.5 \\
+-0.5 \\
+-0.5
+\end{bmatrix}
+\end{align*} \\
+$$
+
+And forgetting about $b_\text{D}$, expanding **Constraint Due To $h_1$**, we get:
+
+$$
+\begin{align*}
+(U_1^\top D) a + b_\text{U, 1} & > 0 \\ 
+\Longrightarrow \left(
+\begin{bmatrix}
+\frac{1}{4} & \frac{1}{4} & -\frac{\sqrt{3}}{4} \\
+\end{bmatrix} \right) a - 0.5 & > 0
+\end{align*}
+$$
+
+This corresponds to a half-space in 3D. The below image illustrates what imposing this half-space constraint onto a cubic volume of space looks like:
+
+<img src = "../../images/multi_layer_space/constraint_h1.png" alt="constraint_h1" width="100%"> 
+*Origin-centered cube gets cut by Constraint Due To h1*
+
+Remember that we also have the Constraints Due To $\text{ReLU}$, which essentially limits us to the positive orthant (hypercube):
+
+<img src = "../../images/multi_layer_space/constraint_relu.png" alt="constraint_relu" width="400px"> 
+*Origin-centered cube is limited to positive orthant after imposing Constraint Due To ReLU*
+
+Combining (taking the intersection of) all the above half-spaces induced by their constraints, we get:
+
+<img src = "../../images/multi_layer_space/constraint_all.png" alt="constraint_all" width="400px"> 
+*a has to live somewhere in this space*
+
+There is one more complication: $a$ doesn't have access to this entire volume of space, particularly because of the following.
+
+Firstly, the decoder that projects the features (call $x$) from $\alpha$-space to $a$ (i.e. the $W$ and $b_W$ in the equation: $a = \text{ReLU}(Wx + b_W)$) implies a hyperplane that does NOT live in the dense region of space (positive-orthant). This is because, for decoders to be able to learn how to extract all features without also activating other features, the decoder hyperplane has to end up looking something like that (explained in ["Superposition - An Actual Image of Latent Spaces"](/posts/viewing-latent-spaces/)):
+
+<img src = "../../images/opt_failure/latent_zone_intro_2.png" alt="Latent zone intro 2" width="400px">
+
+Secondly, the final step of computing $a$ is applying $\text{ReLU}$. Combined with the above assumption, we see that really, only the axial **surfaces** of the above polygon are accessible.
+
+<img src = "../../images/multi_layer_space/accessible_region.png" alt="accessible_region" width="400px"> 
+*Only the darker surfaces (axial planes) are accessible*
+
+If we were to propagate it back to before the $\text{ReLU}$, sort of undoing the projection onto the surfaces of the positive orthant that $\text{ReLU}$ does, we end up with the following, which I've broken down into 2 phases for clarity. The first phase involves un-$\text{ReLU}$-ing 1 dimension at a time so that the relationship between the pre and post-$\text{ReLU}$ regions is geometrically clear, and the second phase involves doing the rest.
+
+<div style="display: flex; justify-content: center;">
+    <video width="500px" autoplay loop muted playsinline>
+        <source src="../../images/multi_layer_space/poly_to_plane.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
+<!-- <img src="../../images/poly_to_plane.gif" width="500px" /> -->
