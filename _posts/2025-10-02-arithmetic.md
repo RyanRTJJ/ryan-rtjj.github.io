@@ -1,5 +1,5 @@
 ---
-published: true
+published: false
 title: Arithmetic Circuits
 date: 2025-10-02 00:00:00 -500
 categories: [statistics]
