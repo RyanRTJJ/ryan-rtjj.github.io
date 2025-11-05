@@ -1,9 +1,9 @@
 ---
-published: false
+published: true
 title: Arithmetic Circuits
 date: 2025-10-30 00:00:00 -500
-categories: [statistics]
-tags: [statistics]
+categories: [mechanistic interpretability]
+tags: [mechanistic interpretability]
 math: true
 ---
 
