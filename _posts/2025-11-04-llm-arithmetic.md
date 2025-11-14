@@ -207,3 +207,31 @@ And plot our circles:
 
 <img src = "../../images/llm_arithmetic/found_the_circles_W_L.png" alt="W_L rows in circle spaces" width="100%"> 
 *W_L rows in Fourier Coefficient Basis for k in {4, 32, 43} (20,000 epochs)*
+
+# 6. What Are The Attention Heads Doing?
+
+The next step in figuring out how the model makes use of these circles is to figure out how the circles connect to the MLP block. Let's take a look at the attention maps for 6 samples pairs for all 4 heads:
+
+<img src = "../../images/llm_arithmetic/rubbish_attn_maps.png" alt="Rubbish attention maps" width="500px"> 
+*Attention Maps for 6 randomly sampled pairs*
+
+Let's focus on the last row of each map since it tells you where the attention head is focusing on while processing the last token (`=`). It looks like rubbish. In particular, I was hoping that we'd see that some attention head has learnt to pay equal attention to the first two tokens, and that all other attention heads become useless, but we don't super see evidence of this.
+
+So where do we go from here? Well, we know that:
+- Attention is just something like the relative magnitude of all the $q \cdot k_i$, for some query vector $q$, where $i$ denotes token index.
+- $q$ and $k$ are just linear projections of the input vector to the attention blocks (i.e. the vectors in the $\mathbb{R}^{128}$ space where we found circles; henceforth called "embedding space").
+
+Therefore, if there's some periodicity in the embedding space, there MUST be some periodicity in the $q$ and $k$ spaces, which means there MUST be some periodicity in the attention maps. Let's fix one of the numbers (and vary the other) and plot the latest row of the attention maps for a large number of sample pairs:
+
+<img src = "../../images/llm_arithmetic/periodic_attn_maps.png" alt="Periodic attention maps" width="500px"> 
+*Attention Maps are actually Periodic!*
+
+And we see here that the attention maps are indeed periodic! As a bonus, let's try to do DFT on these to get their primary frequencies.
+
+<img src = "../../images/llm_arithmetic/attn_fourier_coeffs_20k.png" alt="Attention Fourier Coeff Norms" width="100%"> 
+*Fourier Coefficient Norms of Attn Activations (Last Row) by Head*
+
+You can see that the key frequencies 4, 32, and 43, are distributed over the heads. Some interesting observations include:
+- Head 1 is most attuned to the frequency 4, which we can see from the attention maps
+- Head 2 and Head 3 are most attuned to the frequencies 43 and 32 respectively, we we can also see from the attention maps
+- Head 0 has high-norm coefficients in multiple frequencies, including several non-key frequencies, which interfere to give a non-sinusoidal pattern, which we can also see from the attention maps. It is unclear if the attenuation to multiple frequencies plays some crucial role, or if they're simply not yet sufficiently decayed.
