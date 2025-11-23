@@ -235,3 +235,68 @@ You can see that the key frequencies 4, 32, and 43, are distributed over the hea
 - Head 1 is most attuned to the frequency 4, which we can see from the attention maps
 - Head 2 and Head 3 are most attuned to the frequencies 43 and 32 respectively, we we can also see from the attention maps
 - Head 0 has high-norm coefficients in multiple frequencies, including several non-key frequencies, which interfere to give a non-sinusoidal pattern, which we can also see from the attention maps. It is unclear if the attenuation to multiple frequencies plays some crucial role, or if they're simply not yet sufficiently decayed.
+
+# 6.1. Periodic Attention on Periodic Embeddings
+
+So we've observed that circular / periodic embeddings also mean:
+- Periodic $k$, $q$, and $v$ vectors (since each of these are created via linear projections of the embeddings)
+- Periodic attention patterns.
+
+Remember that the attention values ($a_i$, where $i$ denotes token index) all sum to 1, which means that the attention output for token $i$ (call $o_i$), i.e.:
+
+$$
+\begin{align*}
+o_i = \sum_{j \leq i} a_j * v_j
+\end{align*}
+$$
+
+is a **convex combination** with periodic convex coefficients. In this setting where the attention (when processing the `=` token) is mostly on the first two tokens (`a` and `b` in the equation `a + b =`), we can roughly simplify this to:
+
+$$
+\begin{align*}
+o_= = \alpha W_Vx_a + (1 - \alpha) W_V x_b
+\end{align*}
+$$
+
+where $x_a$ and $x_b$ are the embeddings for tokens `a` and `b` respectively.
+
+For the next step, I wish to see what a periodic convex combination of periodic features looks like. As of yet, we don't know what $W_V$ is, but we know that it is a simple linear projection, which means it won't *warp* the embedding space. I.E. if a bunch of embeddings formed a circle in the embedding space, applying $W_V$ to them may stretch / squeeze them, but won't *warp* them into a non-circle-looking shape like a bean, a knot, a square, or whatnot. Because a simple linear transformation won't fundamentally change the shape of the embeddings, and it is the shape that we're interested in, I'll just pretend $W_V$ is the identity matrix. Then, I can just plot $o$, given by:
+
+$$
+\begin{align*}
+o_= = \alpha x_a + (1 - \alpha) x_b
+\end{align*}
+$$
+
+for some periodic $\alpha$. Since Head 1 looks rather much like a simple sinusoidal curve, we'll just take $\alpha \sim \cos(2 \pi f)$ for some frequency $f$. For our plots, we will also fix `a` (hence $x_a$), and vary `b` with the same frequency. The actual value for Head 1's frequency is $4$, but for the sake of illustration, we'll make it $0.5$.
+
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/05_hz_diff_offsets.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
+
+In fact, depending on how many wavelengths the attention coefficient $\alpha$ is offset (and I suspect each different value of `a` has a different offset), we get a whole family of curves!
+
+<div style="display: flex; justify-content: center;">
+    <video width="500px" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/05_family_of_curves.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
+
+When the circle (embedding) frequency differs from the attention frequency, we also get different families of curves. Below, I illustrate what the attention output ($o$) space looks like when we focus on the dimensions in which the periodicity is different from what the attention heads are attuned to.
+
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/family_of_curves.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
+
+You will see the characteristic petal shapes in all combinations of embedding and attention frequencies. However, notice that when the attention frequency (alpha) is lower than the embedding frequency, you get petals that overlap, whereas when it's above, you get petals that don't overlap.
+
+> A friend Jacob said they're reminiscent of trigonometric polar graphs; indeed, the construction of these curves are different but quite similar, and I wonder if there is some profound connection here.
+
+# 6.2. Umm.
