@@ -34,7 +34,7 @@ To restate the paper's model task, a simple **1-layer Transformer** is trained t
 
 # 2.1. Exact Inputs and Outputs
 
-The model is trained on simple input triplets of tokens: `(token_A, token_B, token_C)`, where `token_A` is ALWAYS token index `113`, which represents the `=` sign. `token_A` and `token_B` will simple be the index of the number they represent, i.e. token index `0` represents the number 0, token `42` represents the token 42, and so on.
+The model is trained on simple input triplets of tokens: `(token_A, token_B, token_C)`, where `token_C` is ALWAYS token index `113`, which represents the `=` sign. `token_A` and `token_B` will simple be the index of the number they represent, i.e. token index `0` represents the number 0, token `42` represents the token 42, and so on.
 
 > Sometimes I'll refer to `triplets` as `pairs` since only `token_A` and `token_B` are meaningfully variable.
 
@@ -152,7 +152,7 @@ Just for good measure, let's try 20,000 epochs:
 
 You can see that there are fewer but cleaner frequency norm spikes now. One of my initial questions when reading the original paper was - why 5 circles? Clearly you just need 1 circle - why did the model settle on 5? I guess we now know that multiple local periodic structures form simultaneously, and the model eventually prefers the higher-signal periodic structures and pares away the redundant / lower signal structures; 5 was just an arbitrary number that the original authors happened to arrive at.
 
-# 5.1. Looking at the Circular Embeddings (W_E Columns)
+# 5.1. Looking at the Circular Embeddings (`W_E` Columns)
 
 Now that we have a grokked model to work with (I'm just going to use the 20,000 epochs one), we can attempt to see if we can actually visualize these embeddings.
 
@@ -190,7 +190,7 @@ Beautiful. And just so we clarify that this only happens for key frequencies, le
 
 Notice that they are random and low-magnitude.
 
-# 5.2. Same Thing (W_L Rows)
+# 5.2. Same Thing (`W_L` Rows)
 
 The paper mentions that they found the same key frequencies in $W_L$, where:
 
@@ -242,11 +242,11 @@ So we've observed that circular / periodic embeddings also mean:
 - Periodic $k$, $q$, and $v$ vectors (since each of these are created via linear projections of the embeddings)
 - Periodic attention patterns.
 
-Remember that the attention values ($a_i$, where $i$ denotes token index) all sum to 1, which means that the attention output for token $i$ (call $o_i$), i.e.:
+Remember that the attention values ($a_i$, where $i$ denotes token index) all sum to 1, which means that the attention output for token $i$ (call $z_i$), i.e.:
 
 $$
 \begin{align*}
-o_i = \sum_{j \leq i} a_j * v_j
+z_i = \sum_{j \leq i} a_j * v_j
 \end{align*}
 $$
 
@@ -254,7 +254,7 @@ is a **convex combination** with periodic convex coefficients. In this setting w
 
 $$
 \begin{align*}
-o_= = \alpha W_Vx_a + (1 - \alpha) W_V x_b
+z_= = \alpha W_Vx_a + (1 - \alpha) W_V x_b
 \end{align*}
 $$
 
@@ -264,7 +264,7 @@ For the next step, I wish to see what a periodic convex combination of periodic 
 
 $$
 \begin{align*}
-o_= = \alpha x_a + (1 - \alpha) x_b
+z_= = \alpha x_a + (1 - \alpha) x_b
 \end{align*}
 $$
 
@@ -286,7 +286,7 @@ In fact, depending on how many wavelengths the attention coefficient $\alpha$ is
 </div>
 <br/>
 
-When the circle (embedding) frequency differs from the attention frequency, we also get different families of curves. Below, I illustrate what the attention output ($o$) space looks like when we focus on the dimensions in which the periodicity is different from what the attention heads are attuned to.
+When the circle (embedding) frequency differs from the attention frequency, we also get different families of curves. Below, I illustrate what the attention output ($z$ or $v$) space looks like when we focus on the dimensions in which the periodicity is different from what the attention heads are attuned to.
 
 <div style="display: flex; justify-content: center;">
     <video width="100%" autoplay loop muted playsinline>
@@ -299,4 +299,209 @@ You will see the characteristic petal shapes in all combinations of embedding an
 
 > A friend Jacob said they're reminiscent of trigonometric polar graphs; indeed, the construction of these curves are different but quite similar, and I wonder if there is some profound connection here.
 
-# 6.2. Umm.
+# 6.2. Petals in Attention Outputs (z)?
+
+The above curves are theoretical predictions for what the outputs $z$ look like when the attention values are periodic with some frequency (`alpha`) and the embeddings are periodic with some other frequency (`embedding freq`), when we fix token `a` and vary token `b`. Let's see if we can actually find these petal shapes in the actual $z$ values for `a = 70` (arbitrarily chosen) and `b in range(113)`.
+
+## Example: Head 1 on 4 Hz Circle Subspace
+
+The above section is a theoretical prediction on what the attention outputs should look like if we were to plot them all for all 113 pairs `(a = 70, b) for b in range(113)`. In visualizing the attention outputs $z$ (not $o$, i.e. just before applying $W_O$), we have two decisions:
+- Which head's outputs to visualize?
+- Which 2D subspace to visualize?
+
+We'll pick the simplest option of looking at Head 1 (because its attention values are simply periodic in only 4 Hz), and visualize the 2D subspace corresponding to the 4 Hz circle in the embedding space. Now, what does this mean?
+
+Remember that **to visualize the 4 Hz circle in the embedding space, we had to use the fourier coefficients to figure out 2 directions to use as our 2D axes**:
+
+```python
+k = 4
+fourier_coeffs = W_E @ fourier_basis.T                              # shape (d_model, P)
+basis_vecs = fourier_coeffs[:, [1 + 2 * (k - 1), 2 + 2 * (k - 1)]]  # shape (d_model, 2)
+basis_vecs_norm = basis_vecs.norm(p=2, dim=0, keepdim=True)
+basis_vecs /= basis_vecs_norm                                       # shape (d_model, 2)
+
+circle_coords_to_visualize = W_E.T @ basis_vecs                     # shape (P, 2)
+```
+
+Because the embeddings are transformed via $W_V$ in the attention block, we want to follow these 2 directions through the transformation via $W_V$. The means answering the question: what 2 directions in the $v$ vectors (or $z$ vectors, since $z$ vectors are just weighted sums of $v$ vectors and hence $z$-space and $v$-space are equivalent) am I now interested in visualizing (that correspond to `basis_vecs` before the application of $W_V$)? Some linear algebra to figure this out:
+
+```python
+# This is the computation of v vectors in attn head i
+V = W_E @ W_V_head_i                        # eqn shapes: (113, 32) = (113, 128) @ (128, 32)
+
+# We would have wanted to visualize W_E @ basis_vecs.
+# Now we only have V, so we have to figure out new_basis to extract from V,
+# the equivalent of basis_vecs in W_E
+W_E @ basis_vecs = V @ new_basis            # eqn shapes: (113, 128) @ (128, 2) = (113, 32) @ (32, 2)
+
+# Substitute
+W_E @ basis_vecs = W_E @ W_V_head_i @ new_basis
+
+# Rearrange
+basis_vecs       = W_V_head_i @ new_basis
+new_basis        = pseudo_inverse(W_V_head_i) @ basis_vecs
+                 = inverse(W_V_head_i.T @ W_V_head_i) @ W_V_head_i.T @ basis_vecs
+
+# Coords to visualize
+projected        = z_values @ new_basis     # shape (113, 2)
+```
+
+Above, we predicted that when the embedding circle frequency (4 Hz) is the same as the attention frequency (4 Hz), we'll get this:
+
+<img src = "../../images/llm_arithmetic/prediction_4hz_4hz.png" alt="Prediction: 4Hz circle, 4Hz attention" width="500px"> 
+*Periodicted z pattern in 4 Hz circle space, for 4 Hz attention frequency*
+
+Let's see what actual embeddings we get:
+
+<img src = "../../images/llm_arithmetic/actual_4hz_4hz.png" alt="Actual: 4Hz circle, 4Hz attention" width="500px"> 
+*Actual z embeddings in 4 Hz circle space, for 4 Hz attention frequency*
+
+## Example: Head 3 on 4 Hz Circle Subspace
+
+Let's try another `(attention_head, subspace)` pair. Let's try head 3 (attention frequency of 32 Hz) on the 2D subspace corresponding to the 4 Hz embedding circle still,
+
+Prediction:
+
+<img src = "../../images/llm_arithmetic/prediction_4hz_32hz.png" alt="Prediction: 4Hz circle, 32Hz attention" width="500px"> 
+*Periodicted z pattern in 4 Hz circle space, for 32 Hz attention frequency*
+
+Actual:
+
+<img src = "../../images/llm_arithmetic/actual_4hz_32hz.png" alt="Actual: 4Hz circle, 32Hz attention" width="100%"> 
+*Actual z embeddings in 4 Hz circle space, for 32 Hz attention frequency*
+
+## Example: Head 1 on 32 Hz Circle Subspace
+
+Another one still!
+
+Prediction:
+
+<img src = "../../images/llm_arithmetic/prediction_32hz_4hz.png" alt="Prediction: 32Hz circle, 4Hz attention" width="500px"> 
+*Periodicted z pattern in 32 Hz circle space, for 4 Hz attention frequency*
+
+Actual:
+
+<img src = "../../images/llm_arithmetic/actual_32hz_4hz.png" alt="Actual: 32Hz circle, 4Hz attention" width="100%"> 
+*Actual z embeddings in 32 Hz circle space, for 4 Hz attention frequency*
+
+I think this is pretty astoundingly beautiful! In particular, nobody has articulated the existence of these multi-lobed petal-like structures in embedding spaces of LLMs even if they've discovered the simple circles / periodic structures. These structures are also very surprising to me, because they don't seem very amenable to linear separation. Representations that sit on the perimeter of a simple circle are not surprising to me because every point can be linearly separated from the rest, and indeed that is what an MLP layer with $\text{ReLU}$ does (refer to ["Superposition - An Actual Image of Latent Spaces"](/posts/viewing-latent-spaces/) for illustrations of this), but the same cannot be said for points that sit on the perimeter of these petal shapes.
+
+
+# 7. Petals Interfere to give Simple Circle
+
+By extension, since the attention outputs ($o$) are merely linear projections of $z$ (i.e. $o = W_O \cdot z$), then these petal shapes should remain present in the $o$ space. For good measure, **for each attention head individually**, I went ahead and did similar visualizations for the head-specific $o$ vectors for all pairs `[(70, b) for b in range(113)]`, and saw the same petal structures.
+
+However, visualizing head by head does **not** give the full picture of what's eventually going on in the $o$-space, because you are only considering each individual head's contribution to the $o$ vectors at any one time. Remember that all the $v$ vectors from each head are stacked, and $W_O$ is applied to that to transform it back to the $\mathbb{R}^{128}$ model space:
+
+<img src = "../../images/llm_arithmetic/wo_action.png" alt="v vectors weighted sum of W_O columns" width="100%"> 
+*v vectors get stacked, then get transformed by W_O*
+
+The application of $W_O$ to the stacked $v$ vectors is equivalent to taking a weighted sum of the columns of $W_O$, where the coefficients are given by the values of the stacked $v$ vectors, so you can see that all the contributions of each attention head are summed together. The consequence of this is that it could well be possible for the contributions from head 2 (e.g.) to disrupt the petal structure contributed by head 1 (e.g.).
+
+# 7.1. Empirical Evidence
+Let's see how the different heads combine to give a final pattern.
+
+## Zoom In: 4 Hz Circle Subspace
+
+<img src = "../../images/llm_arithmetic/aggregation_of_petals_4hz.png" alt="Aggregation of Petals in 4 Hz" width="100%"> 
+*o-vectors corresponding to subspace of 4 Hz Embedding Circle, head-wise and summed*
+
+The petals structure seems to have disappeared in the aggregate $o$ vectors (red plot). But also, is it me or is there a new type of petal structure going on? Petals that look like when kids draw sunflowers (a bunch of conjoined semicircles forming a loop: &#x1F33C;)? That may merely be an artifact of the interpolation being too expressive / overfitting the points, just like in the attn head 1 plot. To be sure I'll just do a Fourier Decomposition and plot the norms of the coefficients for each coefficient again for the red points:
+
+<img src = "../../images/llm_arithmetic/aggregation_of_petals_4hz_fourier.png" alt="Aggregation of Petals in 4 Hz" width="100%"> 
+*Fourier Coefficient Norms for Projected 'o' vectors*
+
+With such a dominant 4 Hz component, we are confident that the circle in the red plot is indeed a circle and not some complex petal-shaped curve. So, it's interesting that these complex petal-shaped curves have recombined to give a circle.
+
+## 32 Hz Circle Subspace
+
+The same happens for the 2D subspaces corresponding to the other embedding circles. Here are the plots for the 32 Hz embedding circle:
+
+<img src = "../../images/llm_arithmetic/aggregation_of_petals_32hz.png" alt="Aggregation of Petals in 32 Hz" width="100%"> 
+*o-vectors corresponding to subspace of 32 Hz Embedding Circle, head-wise and summed*
+
+<img src = "../../images/llm_arithmetic/aggregation_of_petals_32hz_fourier.png" alt="Aggregation of Petals in 32 Hz" width="100%"> 
+*Fourier Coefficient Norms for Projected 'o' vectors (32 Hz subspace)*
+
+## 43 Hz Circle Subspace
+
+And the 43 Hz embedding circle:
+
+<img src = "../../images/llm_arithmetic/aggregation_of_petals_43hz.png" alt="Aggregation of Petals in 43 Hz" width="100%"> 
+*o-vectors corresponding to subspace of 43 Hz Embedding Circle, head-wise and summed*
+
+<img src = "../../images/llm_arithmetic/aggregation_of_petals_43hz_fourier.png" alt="Aggregation of Petals in 43 Hz" width="100%"> 
+*Fourier Coefficient Norms for Projected 'o' vectors (43 Hz subspace)*
+
+## Alternative Visualization
+
+Now that we know that these 4 Hz, 32 Hz, and 43 Hz circles exist in the $o$ vectors, we can use another method to try and visualize them. It would simply be what we did at first with `W_E` and `W_L`: to run DFT on these $o$ vectors and to project them on the 2 directions given by the 128-dimensional $\sin$ and $\cos$ coefficients corresponding to each of these frequencies. I did them just to make sure that these circles were truly truly present in the $o$ vectors:
+
+<img src = "../../images/llm_arithmetic/found_the_circles_o.png" alt="o vectors in circle spaces" width="100%"> 
+*o vectors in Fourier Coefficient Basis for k in {4, 32, 43}*
+
+I make no comment on why the 43 Hz Circle looks so stretched.
+
+# 7.2. Why?
+
+To state what we've observed so far in simple terms:
+- We observed periodic (circular) embeddings
+- Periodic embeddings necessarily lead to periodic attention coefficients
+- Periodic attention on circular embeddings lead to complex periodic (multi-lobed) value embeddings
+  - Each attention head has its own multi-lobed structure
+  - Multi-lobed structures vary based on relationship between embedding circle and attention frequency
+- These multi-lobed structures combine to give a simple single-lobed / circular structure in $o$ space again
+
+**It would be nice if we could argue that:**
+- The **main goal is to generate simple circles** in the $o$ space because they may be **particularly amenable to downstream readout functions** (MLP layer).
+- Embeddings that approximate periodic functions like sines and cosines are especially amenable to composition (constructive interference) to give that desired simple circle. This is essentially the Fourier Decomposition argument again - something like: just like how sines and cosines of different magnitudes and frequencies can combine to give any arbitrary function, **multiple instances of the above petal structures (generated the way we generated them) of various orientations and frequency combinations can combine to give any arbitrary function**, and particularly, a simple circle.
+
+The above would be a neat argument for why periodic embeddings are learnt, and why there are circles of MULTIPLE frequencies, not just one.
+
+For now, this argumentation remains out of scope of this blog post and we will simply operate from the fact the petal structures just coalesce to form a simple circle again.
+
+# 8. How Does MLP Use These Circles?
+
+## Gotcha: Do The `W_E` and `o` Circles Coexist in the Same Subspace?
+
+Between the attention and MLP blocks, the attention output ($o$) is added to the residual stream, which already contains the original embeddings (columns of `W_E`), which itself is a circle. The immediate question to ask is: did the newly added $o$ circle interfere with the `W_E` circle? The only way the 2 circles would meaningfully interact is if they lived in the same subspace. To figure out if any pairs of these basis vectors spanned similar subspaces, for all combination pairs of a set of $o$-derived basis vectors and `W_E`-derived basis vectors, I plotted the dihedral angle (the second angle in the results of `scipy.linalg.subspace_angle`) between them. The dihedral angle is small only if the subspaces are very similar.
+
+<img src = "../../images/llm_arithmetic/dihedral_angles.png" alt="Dihedral Angles" width="700px"> 
+*Dihedral Angles of all (W_E basis, o basis) pairs*
+
+Ok, none of the pairs have a small dihedral angle, so we know that the $o$ vectors / circles are getting written into a different subspace than the ones that the original `W_E` circles live in.
+
+## Guess: `W_up` Should Have 113 Vectors That Align With `o` Circles
+
+My initial guess was that I should be able to find a set (or even 3) of 113 vectors that more or less align with the directions of these $o$ vectors that are arrange in a circle. The reasoning behind this is that each one of these `W_up` vectors should act as a detector for $o$ vectors in that direction and basically produce an activation in one of the 512 elements in the MLP output vector. The MLP output vector will hence have 113 (or 3 sets of 113) positions which each represent 1 number, and `W_down` can just permute them into the correct position such that the softmax will be able to decode the correct number. However, upon deeper thinking, this wasn't quite right, for these reasons:
+- If this were true, we expect $W_L$ to have a large frequency 1 Hz component, which it doesn't. Instead, it has the same frequencies as before (4, 32, 43).
+- This model actually doesn't have superposition (!!!)
+
+## This Model Doesn't Have Superposition
+
+In ["Superposition - An Actual Image of Latent Spaces"](/posts/viewing-latent-spaces/), I illustrate how `W_up`, `b_up`, and $\text{ReLU}$ can cleverly segment a subspace into 2 regimes (per MLP dimension) in order to silence all other features except the one we care about:
+
+<img src = "../../images/opt_failure/latent_zone_intro_1.png" alt="Aggregation of Petals in 43 Hz" width="100%"> 
+*o-vectors corresponding to subspace of 43 Hz Embedding Circle, head-wise and summed*
+
+For example, in the above example, unless an embedding were found in the <span style="color: royalblue">mid-blue region</span>, the post-$\text{ReLU}$ value of that feature will be 0. So, even if you activated the <span style="color: lightsteelblue">light blue</span> or <span style="color: mediumblue">dark blue feature</span>, unless you STRONGLY activated it, you would still be outside of the <span style="color: royalblue">mid-blue region</span>, and hence would be zero-ed by $\text{ReLU}$. The orientation of the regions are controlled by `W_up` and `b_up`. In particular, the more selective (small) you want region $i$ to be, the more **negative** `b_up[i]` has to be.
+
+The **above mechanism is how a model is able to store more features (6) than it has dimensions (2).** In such a setting, the model is said to exhibit superposition. However, **this toy model** that we trained here, after the Modulo Arithmetic Paper, **does not actually exhibit superposition.** Or at least, it doesn't need to exhibit superposition, because **there are only 113 meaningful features** the model has to learn (i.e. `['the answer is {c}' for c in range(113)]`), **which can be contained within the 128 dimensions** of the model (`d_model`).
+
+And so, the MLP block can learn simple linear transformations to maintain the entire geometric structure of the circles WITHOUT making us of $\text{ReLU}$ at all. In such a setting, the model just has to learn **positive** `b_up` values in order to **shift all the features further into the positive orthant** (in the `d_mlp = 512`-dimensional MLP output space), **in order to avoid non-linear distortion by $\textbf{ReLU}$**, which happens at the value 0 for all dimensions.
+
+To prove that this is happening, we visualize the `b_up` values (sorted) and observe that insufficient (way fewer than 113) of them are significantly negative. The negative `b_up` values are what makes a useful superposition of features possible, and since there are way too few of them, we know that this model is not relying on superposition to encode features.
+
+<img src = "../../images/llm_arithmetic/b_up_sorted.png" alt="b_up sorted" width="100%"> 
+*b_up values, sorted*
+
+## `W_up` Columns Don't Line Up With Circle
+
+And indeed, when we plot the 512 columns of `W_up` in the 2D subspaces that we expect those circles to live (given by the sets of Fourier Coefficients obtained from the $o$ vectors), we don't see any nice circles:
+
+<img src = "../../images/llm_arithmetic/W_up_does_not_align.png" alt="b_up sorted" width="100%"> 
+*b_up values, sorted*
+
+## (WIP) The MLP Layer Is Just A Simple Linear Projection
+
+The big kicker here is that I think the model will be able to learn fine modulo arithmetic here if we simply replaced the MPL block with an Identity Function.
