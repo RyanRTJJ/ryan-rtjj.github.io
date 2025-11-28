@@ -236,6 +236,16 @@ You can see that the key frequencies 4, 32, and 43, are distributed over the hea
 - Head 2 and Head 3 are most attuned to the frequencies 43 and 32 respectively, we we can also see from the attention maps
 - Head 0 has high-norm coefficients in multiple frequencies, including several non-key frequencies, which interfere to give a non-sinusoidal pattern, which we can also see from the attention maps. It is unclear if the attenuation to multiple frequencies plays some crucial role, or if they're simply not yet sufficiently decayed.
 
+Crucially, now's also a good time to point out that the attention patterns are not just periodic when varying `b`, but also when varying `a`. This makes sense because `a` and `b` are embedded using the sample `W_E` matrix, meaning that they both use the same circle structures in `W_E`. To see this, we can just visualize the attention score of `a` (or `b`, since they approximately sum to 1; I just arbitrarily chose `a`) in the last row, for all `(a, b)` pairs:
+
+<img src = "../../images/llm_arithmetic/full_p_by_p_plot.png" alt="Full Attention Map" width="100%"> 
+*Attention Maps are Periodic in 'a' and 'b'*
+
+The original Modulo Arithmetic Paper also found such attention maps:
+
+<img src = "../../images/llm_arithmetic/full_p_by_p_plot_og.png" alt="Full Attention Map" width="100%"> 
+*Original Paper's Attention Maps are Periodic in 'a' and 'b' Too*
+
 # 6.1. Periodic Attention on Periodic Embeddings
 
 So we've observed that circular / periodic embeddings also mean:
@@ -488,7 +498,7 @@ For example, in the above example, unless an embedding were found in the <span s
 
 The **above mechanism is how a model is able to store more features (6) than it has dimensions (2).** In such a setting, the model is said to exhibit superposition. However, **this toy model** that we trained here, after the Modulo Arithmetic Paper, **does not actually exhibit superposition.** Or at least, it doesn't need to exhibit superposition, because **there are only 113 meaningful features** the model has to learn (i.e. `['the answer is {c}' for c in range(113)]`), **which can be contained within the 128 dimensions** of the model (`d_model`).
 
-And so, the MLP block can learn simple linear transformations to maintain the entire geometric structure of the circles WITHOUT making us of $\text{ReLU}$ at all. In such a setting, the model just has to learn **positive** `b_up` values in order to **shift all the features further into the positive orthant** (in the `d_mlp = 512`-dimensional MLP output space), **in order to avoid non-linear distortion by $\textbf{ReLU}$**, which happens at the value 0 for all dimensions.
+And so, the MLP block can learn simple linear transformations to maintain the entire geometric structure of the circles WITHOUT making use of $\text{ReLU}$ at all. In such a setting, the model just has to learn **positive** `b_up` values in order to **shift all the features further into the positive orthant** (in the `d_mlp = 512`-dimensional MLP output space), **in order to avoid non-linear distortion by $\textbf{ReLU}$**, which happens at the value 0 for all dimensions.
 
 To prove that this is happening, we visualize the `b_up` values (sorted) and observe that insufficient (way fewer than 113) of them are significantly negative. The negative `b_up` values are what makes a useful superposition of features possible, and since there are way too few of them, we know that this model is not relying on superposition to encode features.
 
@@ -502,6 +512,37 @@ And indeed, when we plot the 512 columns of `W_up` in the 2D subspaces that we e
 <img src = "../../images/llm_arithmetic/W_up_does_not_align.png" alt="b_up sorted" width="100%"> 
 *b_up values, sorted*
 
-## (WIP) The MLP Layer Is Just A Simple Linear Projection
+## The MLP Layer Is Just An Affine Transformation
 
-The big kicker here is that I think the model will be able to learn fine modulo arithmetic here if we simply replaced the MPL block with an Identity Function.
+Following the argumentation that `d_model = 128` is already sufficient dimensions to encode the 113 features without superposition, the job of the MLP layer isn't to exploit $\text{ReLU}$ to arrange features in a superposition, but to actually shift the circles into the positive orthant such that they are NOT affected by $\text{ReLU}$. What this entails adding some offset (which can be done by `b_up`). Here's some visual intuition:
+
+<img src = "../../images/llm_arithmetic/mlp_shift.png" alt="b_up sorted" width="100%"> 
+*MLP just has to move Circle into Positive Orthant; ReLU not necessary*
+
+As proof that the model doesn't have superposed features / need $\text{ReLU}$, I trained a variant of the toy model without the $\text{ReLU}$ activation function, and it managed to grok Modulo Arithmetic:
+
+
+<img src = "../../images/llm_arithmetic/reluless_loss_curves.png" alt="ReLU-less loss curves" width="100%"> 
+*Training Curves of ReLU-less Model Variant*
+
+To reiterate, since the MLP block doesn't actually introduce any meaningful non-linearity to the feature space, we know that the circles are basically preserved through the MLP block. We can see this is true by visualizing the respective 2D circle spaces again (same as before, basis vectors are computed using Fourier Coefficients for these frequencies) and see that the circles are still there:
+
+<img src = "../../images/llm_arithmetic/found_the_circles_mlp_acts.png" alt="Embeddings in Circle Spaces within MLP activations" width="100%">
+*Circles are still there in MLP Activations*
+
+## Decoder (`W_L`)
+
+By now it should be pretty obvious that `W_L` (I'll call this "decoder") simply has to align itself with the circles found in the MLP activation space.
+
+For example, the $65$-th row of `W_L`, or `W_L[65]` (remember that `W_L` has shape `(P, d_mlp)`, hence `W_L[65]` has shape `(d_mlp,)`):
+- Is the decoder for the number $65$ (as in `"the answer is 65"`),
+- So it has to align with the the number $65$'s embedding on the MLP-space circles. This means literally aligning itself parallel to $65$'s embeddings so that dot product is maximized.
+
+Notice that if it were to just align with 1 of the circles (e.g. 4 Hz Circle) without caring about the others, it will NOT be able to properly target the $65$-th feature. This is because the circles are not at all "perfect" and there is a lack of linear separatability, so nearby features (that don't belong to the number $65$) could have larger magnitudes in the $65$ direction than the $65$ embedding itself. In the image below, we see that despite `W_L[65]` aligning perfectly to 65's embedding, it could be out-activated by other numbers like 93 and 8, which are further along the `W_L[65]` direction.
+
+<img src = "../../images/llm_arithmetic/up_close_mlp.png" alt="up close MLP" width="600px">
+*W_L[65] Perfectly Aligns with 65's Embedding, but is Activated More Strongly by 93, 8, and others*
+
+So, the expectation here is that `W_L[65]` has to align with $65$'s MLP embedding with respect to all 3 circle spaces. 
+
+> Because the circles have high frequency (> 1 Hz), they make several complete loops, and these complete loops are not "neat" and hence don't form linearly separable points that sit nicely on the perimeter of a perfect circle. From this, one may get the impression that because this is the case, THEREFORE the model NEEDS multiple circles of different frequencies to be able to disambiguate all numbers. I want to clarify that this is not a strong explanation for having multiple circles. **Firstly,** nothing inherently prevents these loops to be "neat" / "perfect." It's just that because the model is not relying totally on linear separability with respect to one circle, the model is not incentivized to nudge the embeddings to create that perfect circle. **Secondly,** having multiple frequencies is helpful in achieving circular structures (as opposed to petal-shaped structures) in the $o$-space (because multiple frequencies enable multiple petal structures to form, and it is the recombination of them that reconstructs a circular structure). This necessitates having multiple frequencies, hence multiple circles, which relaxes the constraint of linear separability on any one circle.
