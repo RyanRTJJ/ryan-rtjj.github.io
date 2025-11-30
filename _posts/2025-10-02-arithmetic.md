@@ -1,6 +1,6 @@
 ---
-published: true
-title: Arithmetic Circuits
+published: false
+title: (WIP) Arithmetic Circuits
 date: 2025-10-30 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]

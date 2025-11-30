@@ -1,29 +1,37 @@
 ---
 published: true
-title: LLM Arithmetic
+title: Complexity Series (1 / 3) - LLM Arithmetic
 date: 2025-11-04 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]
 math: true
 ---
 
-There are thus far a few algorithms that researchers have discovered are being implicitly implemented by LLMs to be able to perform simple arithmetic. They include:
+This is the first installment of the "Complexity Series", where I endeavor to argue that there are certain classes of problems (simple arithmetic being one of them) that Transformer architectures will **never** be able to solve.
+
+To get started, I want to do a deep dive on known algorithms that Transformers have used to perform simple arithmetic. There are thus far a few algorithms that researchers have discovered are being implicitly implemented by LLMs to be able to perform simple arithmetic. They include:
 - The "Clock" algorithm ([Kantamneni and Tegmark](https://arxiv.org/html/2502.00873v1))
 - Bag of Heuristics ([Nikankin et. al](https://arxiv.org/pdf/2410.21272), [Anthropic](https://transformer-circuits.pub/2025/attribution-graphs/methods.html#graphs-addition))
 - Digit-wise and Carry-over Circuits ([Quirke and Barez](https://arxiv.org/pdf/2310.13121#:~:text=Further%2C%20while%20simple%20arithmetic%20tasks,for%20AI%20safety%20and%20alignment.))
 
-**This post focuses on the rather interesting Clock algorithm,** which itself takes inspiration from the original Clock algorithm alluded to by Nanda et. al in [Progress Measures For Grokking Via Mechanistic Interpretability](https://openreview.net/pdf?id=9XFSbDPmdW), henceforth referred to as just the _Modulo Arithmetic Paper_.
+The first method is the "Clock" method, but because the description of the mechanics of the "Clock" in the Tegmark paper is unexplicit and imprecise to the point of being inadmissible to rigorous scrutiny, we will look at the preceding paper - [Progress Measures For Grokking Via Mechanistic Interpretability](https://openreview.net/pdf?id=9XFSbDPmdW) - which introduces the original Clock algorithm alluded to by Nanda et. al in , henceforth referred to as just the _Modulo Arithmetic Paper_.
 
 # 1. Objective
 
 The Clock algorithm is interesting because is admits an intuitively simple description: LLMs encode some periodic mechanism that conveniently captures the periodic nature of written numbers (digits go from 0 to 9 before wrapping around and repeating), and this periodic mechanism allows it to accurately perform simple or modulo addition. In the case of modulo arithmetic, the mental image this evokes is simple and beautiful; e.g. LLMs represent numbers on a circle much like a clock, and doing `(10 + 6) % 12 = 4`, much like how "10 o'clock + 6 hours = 4 o'clock."
 
-Indeed, in both the Kantamneni and Nanda papers, the authors demonstrate proof that this circular representation of numbers actually exist in models specifically trained to perform simple / modulo arithmetic. Both papers also go on to use ablations, activation patching, and other methods to identify parts of the model that MUST be involved in the arithmetic computation, and essentially rely on modus tollens (if ablate out sine and cosine components, model performance goes to shit, therefore periodic structure must there) to numerically justify that the model must be using this periodic representational structure to perform the addition. However, they still don't quite fully paint a picture of how the model is "reading out" the answer. For example, what happens to the representation (both pre-attention and post-attention) of the `=` token (i.e. the prediction for the answer) when you change the prompt from `a + b =` to `a + d =` where `d` is greater than `a` by a known amount, and specifically how do the MLP embedding and unembedding matrices handle such a change to give a correct answer still? This is insufficiently useful in giving us a deep understanding for how the models are manipulating said periodic structures.
+Indeed, in both the Kantamneni and Nanda papers, the authors demonstrate proof that this circular representation of numbers actually exist in models specifically trained to perform simple / modulo arithmetic. Both papers also go on to use ablations, activation patching, and other methods to identify parts of the model that MUST be involved in the arithmetic computation, and essentially rely on modus tollens (if ablate out sine and cosine components, model performance goes to shit, therefore periodic structure must there) to numerically justify that the model must be using this periodic representational structure to perform the addition. However, they still don't quite fully paint a picture of how the model is "reading out" the answer. For example, what happens to the representation (both pre-attention and post-attention) of the `=` token (i.e. the prediction for the answer) when you increase `b` by some known amount, and specifically how do the MLP embedding and unembedding matrices handle such a change to give a correct answer still? This is insufficiently useful in giving us a deep understanding for how the models are manipulating said periodic structures.
 
 This post aims to re-construct the Modulo Arithmetic Paper with special focus on:
-- The relationship between $W_E$ (the embedding matrix that maps vocabulary space to residual space) and $W_\text{in}$ (the up-projection matrix of the MLP block)
-- What each attention head is doing
-- The relationship between $W_E$ and / or $W_\text{in}$ and $W_L = W_U W_\text{down}$, where $W_\text{down}$ is the down-projection matrix of the MLP block, and $W_U$ is the unembedding matrix that maps residual space back to vocabulary
+
+> &#x2705; = Replication. &#x2B50; = Novel Contribution.
+
+- &#x2705; Confirming that $W_E$, $W_L = W_U W_\text{down}$ contain circles and visualizing them
+- &#x2B50; Investigating and illustrating what the attention block is doing to the original circles in $W_E$
+- &#x2B50; Investigating what the MLP block is doing to these circles
+- &#x2B50; Illustrating the rotation of the circles and explaining how that is achieved
+- &#x2B50; Demonstrate alignment between rows of $W_U$ (the unembedding matrix; refer to architecture diagram below) and appropriate embeddings in the circle to show how read-out of correct answer is done.
+- &#x2B50; Arguing sufficiency conditions for Clock Algorithm to work (how many circles, circle frequency relationships)
 
 # 2. Model Task
 
@@ -135,12 +143,12 @@ In particular, these are the differences I note:
 2. The original paper's "active" `W_E` frequencies are very clean, whereas I only managed to produce 4 clean pairs in this run, with a few other frequencies being somewhat in-between in norm.
 3. The frequencies that are "active" are different from the set of 5 that they cited in the paper.
 
-My hunch for the first two points is that the weight decay works over the training process to slowly pare away frequencies that the model can afford to do without, and that I simply haven't allowed the model enough weight decay time to do that. This is somewhat supported by another run I did for only 5,000 epochs:
+My hunch for the first two points is that the **weight decay works over the training process to slowly pare away frequencies that the model can afford to do without**, and that I simply haven't allowed the model enough weight decay time to do that. This is somewhat supported by another run I did for only 5,000 epochs:
 
 <img src = "../../images/llm_arithmetic/W_E_fourier_coeffs_5k.png" alt="My W_E Fourier Coefficient Norms (5k epochs)" width="100%"> 
 *My W_E Fourier Coefficient Norms (5,000 epochs)*
 
-We can see here that with fewer epochs, I have even more "active" frequencies, that the model has ostensibly not "cleaned up." As for point (3), that is not of any concern as the model doesn't *have* to learn any specific set of frequencies, so long as those frequencies are useful (what is "useful" can be explained multiple ways, but I'll just chalk it up to the explanation of constructive interference that was given in the paper; it's poorly explained, but I'll simply believe it as it's not the point of this post for now).
+We can see here that with fewer epochs, I have even more "active" frequencies, that the model has ostensibly not "cleaned up." As for point (3), that is not of any concern as the model doesn't *have* to learn any specific set of frequencies, so long as those frequencies are useful (what is "useful" will be explained all the way at the end, and it will make a lot of sense).
 
 Just for good measure, let's try 20,000 epochs:
 
@@ -150,7 +158,7 @@ Just for good measure, let's try 20,000 epochs:
 <img src = "../../images/llm_arithmetic/W_E_fourier_coeffs_20k.png" alt="My W_E Fourier Coefficient Norms (20k epochs)" width="100%"> 
 *My W_E Fourier Coefficient Norms (20,000 epochs)*
 
-You can see that there are fewer but cleaner frequency norm spikes now. One of my initial questions when reading the original paper was - why 5 circles? Clearly you just need 1 circle - why did the model settle on 5? I guess we now know that multiple local periodic structures form simultaneously, and the model eventually prefers the higher-signal periodic structures and pares away the redundant / lower signal structures; 5 was just an arbitrary number that the original authors happened to arrive at.
+You can see that there are fewer but cleaner frequency norm spikes now. One of my initial questions when reading the original paper was - why 5 circles? **It seems intuitive that you only need 1 circle - why did the model settle on 5?** I guess we now know that **multiple local periodic structures form simultaneously, and the model eventually prefers the higher-signal periodic structures and pares away the redundant / lower signal structures**; 5 was just an arbitrary number that the original authors happened to arrive at. As it turns out, the minimum number of circles is also 2 and not 1, for reasons that will become clear at the end.
 
 # 5.1. Looking at the Circular Embeddings (`W_E` Columns)
 
@@ -167,7 +175,7 @@ fourier_coeffs = W_E @ fourier_basis.T              # shape (d_model, P)
 fourier_coeff_norms = fourier_coeffs.norm(dim=0)    # shape (P,)
 ```
 
-Then, to visualize the circular structure for `k = 4`, we would simply take `fourier_coeffs[:, [1 + 2 * (k - 1), 2 + 2 * (k - 1)]]` (i.e. the columns that correspond to the sin and cos `d_model`-dimensional coefficients for `k = 4`) as the 2 basis vectors. Then, we would simply project the 113 `W_E` vectors onto these 2 basis vectors (normalized) and see what we get.
+Then, to visualize the circular structure for `k = 4`, we would simply take `fourier_coeffs[:, [1 + 2 * (k - 1), 2 + 2 * (k - 1)]]` (i.e. the columns that correspond to the sin and cos `d_model`-dimensional coefficients for `k = 4`) as the 2 basis vectors. From now on, we'll call this the **Fourier-Inferred 2D Basis (k Hz Circle)** or **Fourier-Inferred 2D Subspace (k Hz Circle)**. Then, we would simply project the 113 `W_E` vectors onto these 2 basis vectors (normalized) and see what we get.
 
 We get the circles, as expected:
 
@@ -206,7 +214,9 @@ So, let's do the same for `W_L`, which has shape `(d_vocab, d_mlp)`. Let's first
 And plot our circles:
 
 <img src = "../../images/llm_arithmetic/found_the_circles_W_L.png" alt="W_L rows in circle spaces" width="100%"> 
-*W_L rows in Fourier Coefficient Basis for k in {4, 32, 43} (20,000 epochs)*
+*W_L rows in Fourier-Inferred 2D Basis (k Hz Circle), for k in {4, 32, 43} (20,000 epochs)*
+
+I should mention that the original paper chose to visualize $W_U W_\text{down}$, even though there is a bias in the MLP down-projection, $b_\text{down}$. The fact that $W_L$ doesn't take into account $b_\text{down}$ is partially the cause for the extra warped circles here.
 
 # 6. What Are The Attention Heads Doing?
 
@@ -221,7 +231,7 @@ So where do we go from here? Well, we know that:
 - Attention is just something like the relative magnitude of all the $q \cdot k_i$, for some query vector $q$, where $i$ denotes token index.
 - $q$ and $k$ are just linear projections of the input vector to the attention blocks (i.e. the vectors in the $\mathbb{R}^{128}$ space where we found circles; henceforth called "embedding space").
 
-Therefore, if there's some periodicity in the embedding space, there MUST be some periodicity in the $q$ and $k$ spaces, which means there MUST be some periodicity in the attention maps. Let's fix one of the numbers (and vary the other) and plot the latest row of the attention maps for a large number of sample pairs:
+Therefore, **if there's some periodicity in the embedding space, there MUST be some periodicity in the $q$ and $k$ spaces, which means there MUST be some periodicity in the attention maps.** Let's fix one of the numbers (and vary the other) and plot the latest row of the attention maps for a large number of sample pairs:
 
 <img src = "../../images/llm_arithmetic/periodic_attn_maps.png" alt="Periodic attention maps" width="500px"> 
 *Attention Maps are actually Periodic!*
@@ -236,7 +246,7 @@ You can see that the key frequencies 4, 32, and 43, are distributed over the hea
 - Head 2 and Head 3 are most attuned to the frequencies 43 and 32 respectively, we we can also see from the attention maps
 - Head 0 has high-norm coefficients in multiple frequencies, including several non-key frequencies, which interfere to give a non-sinusoidal pattern, which we can also see from the attention maps. It is unclear if the attenuation to multiple frequencies plays some crucial role, or if they're simply not yet sufficiently decayed.
 
-Crucially, now's also a good time to point out that the attention patterns are not just periodic when varying `b`, but also when varying `a`. This makes sense because `a` and `b` are embedded using the sample `W_E` matrix, meaning that they both use the same circle structures in `W_E`. To see this, we can just visualize the attention score of `a` (or `b`, since they approximately sum to 1; I just arbitrarily chose `a`) in the last row, for all `(a, b)` pairs:
+Crucially, now's also a good time to point out that the **attention patterns are not just periodic when varying `b`, but also when varying `a`.** This makes sense because `a` and `b` are embedded using the sample `W_E` matrix, meaning that they both use the same circle structures in `W_E`. To see this, we can just visualize the attention score of `a` (or `b`, since they approximately sum to 1; I just arbitrarily chose `a`) in the last row, for all `(a, b)` pairs:
 
 <img src = "../../images/llm_arithmetic/full_p_by_p_plot.png" alt="Full Attention Map" width="100%"> 
 *Attention Maps are Periodic in 'a' and 'b'*
@@ -270,7 +280,11 @@ $$
 
 where $x_a$ and $x_b$ are the embeddings for tokens `a` and `b` respectively.
 
-For the next step, I wish to see what a periodic convex combination of periodic features looks like. As of yet, we don't know what $W_V$ is, but we know that it is a simple linear projection, which means it won't *warp* the embedding space. I.E. if a bunch of embeddings formed a circle in the embedding space, applying $W_V$ to them may stretch / squeeze them, but won't *warp* them into a non-circle-looking shape like a bean, a knot, a square, or whatnot. Because a simple linear transformation won't fundamentally change the shape of the embeddings, and it is the shape that we're interested in, I'll just pretend $W_V$ is the identity matrix. Then, I can just plot $o$, given by:
+For the next step, I wish to see what a **periodic convex combination of periodic features** looks like. As of yet, we don't know what $W_V$ is, but we know that it is a simple linear projection, which means it won't *warp* the embedding space.
+
+> I.E. if a bunch of embeddings formed a circle in the embedding space, applying $W_V$ to them may stretch / squeeze them, but won't *warp* them into a non-circle-looking shape like a bean, a knot, a square, or whatnot.
+
+Because a simple linear transformation won't fundamentally change the shape of the embeddings, and it is the shape that we're interested in, I'll just pretend $W_V$ is the identity matrix. Then, I can just plot $z$ of the `=` token, given by:
 
 $$
 \begin{align*}
@@ -287,7 +301,7 @@ for some periodic $\alpha$. Since Head 1 looks rather much like a simple sinusoi
 </div>
 <br/>
 
-In fact, depending on how many wavelengths the attention coefficient $\alpha$ is offset (and I suspect each different value of `a` has a different offset), we get a whole family of curves!
+In fact, depending on how many wavelengths the attention coefficient $\alpha$ is offset (looking at the attention maps above, this offset is itself periodic), we get a **whole family of curves**!
 
 <div style="display: flex; justify-content: center;">
     <video width="500px" autoplay loop muted playsinline>
@@ -296,7 +310,7 @@ In fact, depending on how many wavelengths the attention coefficient $\alpha$ is
 </div>
 <br/>
 
-When the circle (embedding) frequency differs from the attention frequency, we also get different families of curves. Below, I illustrate what the attention output ($z$ or $v$) space looks like when we focus on the dimensions in which the periodicity is different from what the attention heads are attuned to.
+**When the circle (embedding) frequency differs from the attention frequency, we also get different families of curves.** Below, I illustrate what the attention output ($z$ or $v$; since $z$ vectors are just weighted sums of $v$ vectors, $z$-space and $v$-space are equivalent)) space looks like when we focus on the dimensions in which the periodicity is different from what the attention heads are attuned to.
 
 <div style="display: flex; justify-content: center;">
     <video width="100%" autoplay loop muted playsinline>
@@ -305,21 +319,21 @@ When the circle (embedding) frequency differs from the attention frequency, we a
 </div>
 <br/>
 
-You will see the characteristic petal shapes in all combinations of embedding and attention frequencies. However, notice that when the attention frequency (alpha) is lower than the embedding frequency, you get petals that overlap, whereas when it's above, you get petals that don't overlap.
+You will see the characteristic **petal shapes** in all combinations of embedding and attention frequencies. Though not super relevant, I'd point out that when the attention frequency (alpha) is lower than the embedding frequency, you get petals that overlap, whereas when it's above, you get petals that don't overlap.
 
 > A friend Jacob said they're reminiscent of trigonometric polar graphs; indeed, the construction of these curves are different but quite similar, and I wonder if there is some profound connection here.
 
-# 6.2. Petals in Attention Outputs (z)?
+# 6.2. Petals in Attention Outputs (z; before `W_O`)?
 
-The above curves are theoretical predictions for what the outputs $z$ look like when the attention values are periodic with some frequency (`alpha`) and the embeddings are periodic with some other frequency (`embedding freq`), when we fix token `a` and vary token `b`. Let's see if we can actually find these petal shapes in the actual $z$ values for `a = 70` (arbitrarily chosen) and `b in range(113)`.
+**The above curves are theoretical predictions** for what the outputs $z$ look like when the attention values are periodic with some frequency (`alpha`) and the embeddings are periodic with some other frequency (`embedding freq`), when we fix token `a` and vary token `b`. **Let's see if we can actually find these petal shapes in the actual $z$ values for `a = 70` (arbitrarily chosen) and `b in range(113)`.**
 
 ## Example: Head 1 on 4 Hz Circle Subspace
 
-The above section is a theoretical prediction on what the attention outputs should look like if we were to plot them all for all 113 pairs `(a = 70, b) for b in range(113)`. In visualizing the attention outputs $z$ (not $o$, i.e. just before applying $W_O$), we have two decisions:
+In visualizing the attention outputs $z$ (not $o$, i.e. just before applying $W_O$), we have two decisions:
 - Which head's outputs to visualize?
 - Which 2D subspace to visualize?
 
-We'll pick the simplest option of looking at Head 1 (because its attention values are simply periodic in only 4 Hz), and visualize the 2D subspace corresponding to the 4 Hz circle in the embedding space. Now, what does this mean?
+We'll start with the simplest option of looking at Head 1 (because its attention values are simply periodic in only 4 Hz), and visualize the 2D subspace corresponding to the 4 Hz circle in the embedding space. Now, what does this mean?
 
 Remember that **to visualize the 4 Hz circle in the embedding space, we had to use the fourier coefficients to figure out 2 directions to use as our 2D axes**:
 
@@ -333,7 +347,7 @@ basis_vecs /= basis_vecs_norm                                       # shape (d_m
 circle_coords_to_visualize = W_E.T @ basis_vecs                     # shape (P, 2)
 ```
 
-Because the embeddings are transformed via $W_V$ in the attention block, we want to follow these 2 directions through the transformation via $W_V$. The means answering the question: what 2 directions in the $v$ vectors (or $z$ vectors, since $z$ vectors are just weighted sums of $v$ vectors and hence $z$-space and $v$-space are equivalent) am I now interested in visualizing (that correspond to `basis_vecs` before the application of $W_V$)? Some linear algebra to figure this out:
+Because the embeddings are transformed via $W_V$ in the attention block, we want to follow these 2 directions through the transformation via $W_V$. The means answering the question: what 2 directions in the $v$ vectors (or $z$ vectors) am I now interested in visualizing (that correspond to `basis_vecs` before the application of $W_V$)? Some linear algebra to figure this out:
 
 ```python
 # This is the computation of v vectors in attn head i
@@ -364,7 +378,7 @@ Above, we predicted that when the embedding circle frequency (4 Hz) is the same 
 Let's see what actual embeddings we get:
 
 <img src = "../../images/llm_arithmetic/actual_4hz_4hz.png" alt="Actual: 4Hz circle, 4Hz attention" width="500px"> 
-*Actual z embeddings in 4 Hz circle space, for 4 Hz attention frequency*
+*Actual z embeddings in Fourier-Inferred 2D Basis (4 Hz circle), for 4 Hz attention frequency*
 
 ## Example: Head 3 on 4 Hz Circle Subspace
 
@@ -373,12 +387,12 @@ Let's try another `(attention_head, subspace)` pair. Let's try head 3 (attention
 Prediction:
 
 <img src = "../../images/llm_arithmetic/prediction_4hz_32hz.png" alt="Prediction: 4Hz circle, 32Hz attention" width="500px"> 
-*Periodicted z pattern in 4 Hz circle space, for 32 Hz attention frequency*
+*Periodicted z pattern in Fourier-Inferred 2D Basis (4 Hz circle), for 32 Hz attention frequency*
 
 Actual:
 
 <img src = "../../images/llm_arithmetic/actual_4hz_32hz.png" alt="Actual: 4Hz circle, 32Hz attention" width="100%"> 
-*Actual z embeddings in 4 Hz circle space, for 32 Hz attention frequency*
+*Actual z embeddings in Fourier-Inferred 2D Basis (4 Hz circle), for 32 Hz attention frequency*
 
 ## Example: Head 1 on 32 Hz Circle Subspace
 
@@ -387,26 +401,26 @@ Another one still!
 Prediction:
 
 <img src = "../../images/llm_arithmetic/prediction_32hz_4hz.png" alt="Prediction: 32Hz circle, 4Hz attention" width="500px"> 
-*Periodicted z pattern in 32 Hz circle space, for 4 Hz attention frequency*
+*Periodicted z pattern in Fourier-Inferred 2D Basis (32 Hz circle), for 4 Hz attention frequency*
 
 Actual:
 
 <img src = "../../images/llm_arithmetic/actual_32hz_4hz.png" alt="Actual: 32Hz circle, 4Hz attention" width="100%"> 
-*Actual z embeddings in 32 Hz circle space, for 4 Hz attention frequency*
+*Actual z embeddings in Fourier-Inferred 2D Basis (32 Hz circle), for 4 Hz attention frequency*
 
 I think this is pretty astoundingly beautiful! In particular, nobody has articulated the existence of these multi-lobed petal-like structures in embedding spaces of LLMs even if they've discovered the simple circles / periodic structures. These structures are also very surprising to me, because they don't seem very amenable to linear separation. Representations that sit on the perimeter of a simple circle are not surprising to me because every point can be linearly separated from the rest, and indeed that is what an MLP layer with $\text{ReLU}$ does (refer to ["Superposition - An Actual Image of Latent Spaces"](/posts/viewing-latent-spaces/) for illustrations of this), but the same cannot be said for points that sit on the perimeter of these petal shapes.
 
 
 # 7. Petals Interfere to give Simple Circle
 
-By extension, since the attention outputs ($o$) are merely linear projections of $z$ (i.e. $o = W_O \cdot z$), then these petal shapes should remain present in the $o$ space. For good measure, **for each attention head individually**, I went ahead and did similar visualizations for the head-specific $o$ vectors for all pairs `[(70, b) for b in range(113)]`, and saw the same petal structures.
+By extension, **since the attention outputs ($o$) are merely linear projections of $z$ (i.e. $o = W_O \cdot z$), then these petal shapes should remain present in the $o$ space.** For good measure, **for each attention head individually**, I went ahead and did similar visualizations for the head-specific $o$ vectors for all pairs `[(70, b) for b in range(113)]`, and saw the same petal structures.
 
 However, visualizing head by head does **not** give the full picture of what's eventually going on in the $o$-space, because you are only considering each individual head's contribution to the $o$ vectors at any one time. Remember that all the $v$ vectors from each head are stacked, and $W_O$ is applied to that to transform it back to the $\mathbb{R}^{128}$ model space:
 
 <img src = "../../images/llm_arithmetic/wo_action.png" alt="v vectors weighted sum of W_O columns" width="100%"> 
 *v vectors get stacked, then get transformed by W_O*
 
-The application of $W_O$ to the stacked $v$ vectors is equivalent to taking a weighted sum of the columns of $W_O$, where the coefficients are given by the values of the stacked $v$ vectors, so you can see that all the contributions of each attention head are summed together. The consequence of this is that it could well be possible for the contributions from head 2 (e.g.) to disrupt the petal structure contributed by head 1 (e.g.).
+The application of $W_O$ to the stacked $v$ vectors is equivalent to taking a weighted sum of the columns of $W_O$, where the coefficients are given by the values of the stacked $v$ vectors, so you can see that all the contributions of each attention head are summed together. **The consequence of this is that it could well be possible for the contributions from head 2 (e.g.) to disrupt the petal structure contributed by head 1 (e.g.).**
 
 # 7.1. Empirical Evidence
 Let's see how the different heads combine to give a final pattern.
@@ -414,41 +428,41 @@ Let's see how the different heads combine to give a final pattern.
 ## Zoom In: 4 Hz Circle Subspace
 
 <img src = "../../images/llm_arithmetic/aggregation_of_petals_4hz.png" alt="Aggregation of Petals in 4 Hz" width="100%"> 
-*o-vectors corresponding to subspace of 4 Hz Embedding Circle, head-wise and summed*
+*`o`-vectors corresponding to Fourier-Inferred 2D Subspace (4 Hz Embedding Circle), head-wise and summed*
 
-The petals structure seems to have disappeared in the aggregate $o$ vectors (red plot). But also, is it me or is there a new type of petal structure going on? Petals that look like when kids draw sunflowers (a bunch of conjoined semicircles forming a loop: &#x1F33C;)? That may merely be an artifact of the interpolation being too expressive / overfitting the points, just like in the attn head 1 plot. To be sure I'll just do a Fourier Decomposition and plot the norms of the coefficients for each coefficient again for the red points:
+This is quite amazing. The petals structure seems to have disappeared in the aggregate $o$ vectors (red plot), to give a circle! The circle looks very wiggly, and I suspected that it could either be not a circle in actuality, or that it could merely be an artifact of the interpolation being too expressive / overfitting the points, just like in the attn head 1 plot. To be sure, I did a Fourier Decomposition and plotted the norms of the coefficients for each coefficient again for the red points:
 
 <img src = "../../images/llm_arithmetic/aggregation_of_petals_4hz_fourier.png" alt="Aggregation of Petals in 4 Hz" width="100%"> 
-*Fourier Coefficient Norms for Projected 'o' vectors*
+*Fourier Coefficient Norms for Projected `o` vectors*
 
-With such a dominant 4 Hz component, we are confident that the circle in the red plot is indeed a circle and not some complex petal-shaped curve. So, it's interesting that these complex petal-shaped curves have recombined to give a circle.
+With such a dominant 4 Hz component, we are confident that the circle in the red plot is indeed a circle and not some complex petal-shaped curve. So, it's interesting that **these complex petal-shaped curves have recombined to give a circle!**
 
 ## 32 Hz Circle Subspace
 
 The same happens for the 2D subspaces corresponding to the other embedding circles. Here are the plots for the 32 Hz embedding circle:
 
 <img src = "../../images/llm_arithmetic/aggregation_of_petals_32hz.png" alt="Aggregation of Petals in 32 Hz" width="100%"> 
-*o-vectors corresponding to subspace of 32 Hz Embedding Circle, head-wise and summed*
+*`o`-vectors corresponding to Fourier-Inferred 2D subspace (32 Hz Embedding Circle), head-wise and summed*
 
 <img src = "../../images/llm_arithmetic/aggregation_of_petals_32hz_fourier.png" alt="Aggregation of Petals in 32 Hz" width="100%"> 
-*Fourier Coefficient Norms for Projected 'o' vectors (32 Hz subspace)*
+*Fourier Coefficient Norms for Projected `o` vectors (32 Hz subspace)*
 
 ## 43 Hz Circle Subspace
 
 And the 43 Hz embedding circle:
 
 <img src = "../../images/llm_arithmetic/aggregation_of_petals_43hz.png" alt="Aggregation of Petals in 43 Hz" width="100%"> 
-*o-vectors corresponding to subspace of 43 Hz Embedding Circle, head-wise and summed*
+*`o`-vectors corresponding to Fourier-Inferred 2D Subspace (43 Hz Embedding Circle), head-wise and summed*
 
 <img src = "../../images/llm_arithmetic/aggregation_of_petals_43hz_fourier.png" alt="Aggregation of Petals in 43 Hz" width="100%"> 
-*Fourier Coefficient Norms for Projected 'o' vectors (43 Hz subspace)*
+*Fourier Coefficient Norms for Projected `o` vectors (43 Hz subspace)*
 
 ## Alternative Visualization
 
 Now that we know that these 4 Hz, 32 Hz, and 43 Hz circles exist in the $o$ vectors, we can use another method to try and visualize them. It would simply be what we did at first with `W_E` and `W_L`: to run DFT on these $o$ vectors and to project them on the 2 directions given by the 128-dimensional $\sin$ and $\cos$ coefficients corresponding to each of these frequencies. I did them just to make sure that these circles were truly truly present in the $o$ vectors:
 
 <img src = "../../images/llm_arithmetic/found_the_circles_o.png" alt="o vectors in circle spaces" width="100%"> 
-*o vectors in Fourier Coefficient Basis for k in {4, 32, 43}*
+*`o` vectors in Fourier-Inferred 2D Basis (k Hz circle) for k in {4, 32, 43} (alternatively calculated)*
 
 I make no comment on why the 43 Hz Circle looks so stretched.
 
@@ -474,16 +488,16 @@ For now, this argumentation remains out of scope of this blog post and we will s
 
 ## Gotcha: Do The `W_E` and `o` Circles Coexist in the Same Subspace?
 
-Between the attention and MLP blocks, the attention output ($o$) is added to the residual stream, which already contains the original embeddings (columns of `W_E`), which itself is a circle. The immediate question to ask is: did the newly added $o$ circle interfere with the `W_E` circle? The only way the 2 circles would meaningfully interact is if they lived in the same subspace. To figure out if any pairs of these basis vectors spanned similar subspaces, for all combination pairs of a set of $o$-derived basis vectors and `W_E`-derived basis vectors, I plotted the dihedral angle (the second angle in the results of `scipy.linalg.subspace_angle`) between them. The dihedral angle is small only if the subspaces are very similar.
+Between the attention and MLP blocks, the attention output ($o$) is added to the residual stream, which already contains the original embeddings (columns of `W_E`), which itself is a circle. The immediate question to ask is: **did the newly added $o$ circle interfere with the `W_E` circle?** The only way the 2 circles would meaningfully interact is if they lived in the same subspace. To figure out if any pairs of these basis vectors spanned similar subspaces, for all combination pairs of a set of $o$-derived basis vectors and `W_E`-derived basis vectors, I plotted the dihedral angle (think of this as the angle between the normals of 2 planes) between them. The dihedral angle is small only if the subspaces are very similar.
 
 <img src = "../../images/llm_arithmetic/dihedral_angles.png" alt="Dihedral Angles" width="700px"> 
 *Dihedral Angles of all (W_E basis, o basis) pairs*
 
-Ok, none of the pairs have a small dihedral angle, so we know that the $o$ vectors / circles are getting written into a different subspace than the ones that the original `W_E` circles live in.
+Ok, none of the pairs have a small dihedral angle, so we know that the $o$ vectors / circles are getting written into a different subspace than the ones that the original `W_E` circles live in - they don't interfere.
 
 ## Guess: `W_up` Should Have 113 Vectors That Align With `o` Circles
 
-My initial guess was that I should be able to find a set (or even 3) of 113 vectors that more or less align with the directions of these $o$ vectors that are arrange in a circle. The reasoning behind this is that each one of these `W_up` vectors should act as a detector for $o$ vectors in that direction and basically produce an activation in one of the 512 elements in the MLP output vector. The MLP output vector will hence have 113 (or 3 sets of 113) positions which each represent 1 number, and `W_down` can just permute them into the correct position such that the softmax will be able to decode the correct number. However, upon deeper thinking, this wasn't quite right, for these reasons:
+My initial guess was that I should be able to find a set (or even 3) of 113 vectors that more or less align with the directions of these $o$ vectors that are arranged in a circle. The reasoning behind this is that each one of these `W_up` vectors should act as a detector for $o$ vectors in that direction and basically produce an activation in one of the 512 elements in the MLP output vector. The MLP output vector will hence have 113 (or 3 sets of 113) positions which each represent 1 number, and `W_down` can just permute them into the correct position such that the softmax will be able to decode the correct number. However, upon deeper thinking, this wasn't quite right, for these reasons:
 - If this were true, we expect $W_L$ to have a large frequency 1 Hz component, which it doesn't. Instead, it has the same frequencies as before (4, 32, 43).
 - This model actually doesn't have superposition (!!!)
 
@@ -514,7 +528,7 @@ And indeed, when we plot the 512 columns of `W_up` in the 2D subspaces that we e
 
 ## The MLP Layer Is Just An Affine Transformation
 
-Following the argumentation that `d_model = 128` is already sufficient dimensions to encode the 113 features without superposition, the job of the MLP layer isn't to exploit $\text{ReLU}$ to arrange features in a superposition, but to actually shift the circles into the positive orthant such that they are NOT affected by $\text{ReLU}$. What this entails adding some offset (which can be done by `b_up`). Here's some visual intuition:
+Following the argumentation that `d_model = 128` is already sufficient dimensions to encode the 113 features without superposition, **the job of the MLP layer isn't to exploit $\text{ReLU}$ to arrange features in a superposition, but to actually shift the circles into the positive orthant such that they are NOT affected by $\text{ReLU}$.** What this entails adding some offset (which can be done by `b_up`). Here's some visual intuition:
 
 <img src = "../../images/llm_arithmetic/mlp_shift.png" alt="b_up sorted" width="100%"> 
 *MLP just has to move Circle into Positive Orthant; ReLU not necessary*
@@ -530,19 +544,140 @@ To reiterate, since the MLP block doesn't actually introduce any meaningful non-
 <img src = "../../images/llm_arithmetic/found_the_circles_mlp_acts.png" alt="Embeddings in Circle Spaces within MLP activations" width="100%">
 *Circles are still there in MLP Activations*
 
-## Decoder (`W_L`)
+## 9.1. Rotation of Circles
 
-By now it should be pretty obvious that `W_L` (I'll call this "decoder") simply has to align itself with the circles found in the MLP activation space.
+Now, we know that:
+- The number embeddings are periodic, which means that attention values (for any given `a`, for all `(a, b)` pairs) are also periodic
+- Each attention head outputs different petal structures depending on its attention frequency
+- These petal structures sum to form circles again. **TLDR: the attention block creates circles via a summation of petals.**
+- The MLP block is just an affine transformation. This transformation is NOT a function of input data.
+- The rows of `W_L` are probes / detectors that infer the answer depending on which numbers in the number circle the rows align most with. The rows of `W_L` are NOT a function of input data.
 
-For example, the $65$-th row of `W_L`, or `W_L[65]` (remember that `W_L` has shape `(P, d_mlp)`, hence `W_L[65]` has shape `(d_mlp,)`):
-- Is the decoder for the number $65$ (as in `"the answer is 65"`),
-- So it has to align with the the number $65$'s embedding on the MLP-space circles. This means literally aligning itself parallel to $65$'s embeddings so that dot product is maximized.
+This means that the computation of the circles output by the attention block are ALL of the meaningful computation of the answer to `(a + b) % P = ?`. Since this circle has to align with the correct rows of `W_L`, when we try different values of `a` and `b`, we should expect to observe that these circles are rotating in some way. 
 
-Notice that if it were to just align with 1 of the circles (e.g. 4 Hz Circle) without caring about the others, it will NOT be able to properly target the $65$-th feature. This is because the circles are not at all "perfect" and there is a lack of linear separatability, so nearby features (that don't belong to the number $65$) could have larger magnitudes in the $65$ direction than the $65$ embedding itself. In the image below, we see that despite `W_L[65]` aligning perfectly to 65's embedding, it could be out-activated by other numbers like 93 and 8, which are further along the `W_L[65]` direction.
+## 9.2. `o` Circles Revolve Around
 
-<img src = "../../images/llm_arithmetic/up_close_mlp.png" alt="up close MLP" width="600px">
-*W_L[65] Perfectly Aligns with 65's Embedding, but is Activated More Strongly by 93, 8, and others*
+Let's try to plot the circles - and actually, let's animate them to see how they move. Here's how to interpret the following animation:
+- 1 frame corresponds to 1 value of `a`
+- Each point in a single frame represents the `o` vector of the `=` token for a particular `(a, b)` pair. We plot every value of `b` for this value of `a`, so each circle is made up of 113 points.
+- The gradient of each circle represents the increasing values of `b`.
+- The small grey dots are the number embeddings (rows of $W_E$), projected accordingly through $W_V$ and $W_O$.
 
-So, the expectation here is that `W_L[65]` has to align with $65$'s MLP embedding with respect to all 3 circle spaces. 
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/revolving_o_circles_w_number_embeddings.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
 
-> Because the circles have high frequency (> 1 Hz), they make several complete loops, and these complete loops are not "neat" and hence don't form linearly separable points that sit nicely on the perimeter of a perfect circle. From this, one may get the impression that because this is the case, THEREFORE the model NEEDS multiple circles of different frequencies to be able to disambiguate all numbers. I want to clarify that this is not a strong explanation for having multiple circles. **Firstly,** nothing inherently prevents these loops to be "neat" / "perfect." It's just that because the model is not relying totally on linear separability with respect to one circle, the model is not incentivized to nudge the embeddings to create that perfect circle. **Secondly,** having multiple frequencies is helpful in achieving circular structures (as opposed to petal-shaped structures) in the $o$-space (because multiple frequencies enable multiple petal structures to form, and it is the recombination of them that reconstructs a circular structure). This necessitates having multiple frequencies, hence multiple circles, which relaxes the constraint of linear separability on any one circle.
+**As you can see, the circles are not rotating. However, they seem to be sliding around the various quadrants / revolving around the origin.** Now's also a good time to remember how these circles were formed - the summation of petal structures (1 per head). The petals are themselves the trajectories traced out by various interpolations between 2 points on the embedding circle (or columns of $W_E$; animation in ["Section 6.1"](#61-periodic-attention-on-periodic-embeddings)), which means these individual petal structures are strictly within the confines of the embedding circle. The summation of the petal structures (these circles above) should also hence be within the confines of the embedding circle, magnified by `{num_heads}` times at most. In this case, you see that the colorful circles are orbiting within the confines of the embedding circle (grey dots).
+
+## 9.3. `o` Circles Rotate
+
+> Henceforth, any mention of **"Singular Vectors" will be interchangeable with "Principle Components"**
+
+It turns out that **this is a rather misleading way to look at the movement of the circles.** Using the Fourier Coefficients to infer a 2D basis for each circle ensures that you will see the circle, but misses out on extra important information. If we were to collect all the pairs of 2D basis vectors (one per value of `a`), we now have a collection of `2 * len(sample_a_values)` vectors, each being `d_model`-dimensional. If we were to take the Singular Value Decomposition (SVD) of this set of vectors and take the top 2 Singular Vectors / Principle Components (PCs), we would see the circles head-on, much like in the above animations. This is because by construction, the set of `d_model`-dimensional basis vectors we've collected prioritize the visibility of the circles. However, now that we have the **entire set** of basis vector pairs, the subsequent singular vectors also capture how the circle orientations (i.e. the surface on which the circle lies) change as `a` changes. **It turns out that PCs 3 and 4 (or `2` and `3`, 0-indexed) are actually very important too**, and I'll explain the reason later. For now, I simply present these dimensions of the circles:
+
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/revolving_and_rotating_o_vectors.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
+
+The key takeaway in this visualization are that:
+- The orbit isn't as pronounced. One may conclude that either **there's no orbit**, or if there is, instead of orbiting a center that is outside the circle, the center is now inside the circle.
+- **There is rotation (!!!)**
+
+## 9.4. Rotation + Revolution
+
+For this next part, I'll plot the circles in the MLP activation (post-$\text{ReLU}$) space, instead of the `o` space. The affine transformations in the MLP block do some stretching / reflection of the `o` space, which makes the visualizations clearer, but for the most part, the dimensions are still partitioned pretty nicely into the "Revolution Space" (first 2 Singular Vector Directions / Principle Components) and the "Rotation Space" (second 2 Principle Components). To satisfy our curiosity, let's just see what this looks like, as best as we can (in 3D), for a chosen circle (4 Hz circle). 
+
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/pringle.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
+
+## 9.5. Discovering The Relevance of Fourth PC
+
+This section is about how I discovered that the third (and fourth) Principle Components were important. Feel free to skip.
+
+If we were to stick with only the 2D visualization of the MLP Activation circles, we'd see that the circles seem to move **(revolve) around a center point that was outside the circles, without any rotation.** However, the MLP output circles (after applying `W_down` and `b_down`), the circles seem to **have no revolution (they're always in the center), but they now have a rotation.** I didn't understand how a simple affine transformation could achieve that, so I tried to examine `W_down` to see if I could construct a simplified version of it and see what it was doing.
+
+I first took a look at the singular values of `W_down`:
+
+<img src = "../../images/llm_arithmetic/W_down_SVs.png" alt="W_down Singular Values" width="100%">
+*Singular Values of W_down*
+
+And noticed that there were only 6 of them that were large. This roughly maps onto the fact that we have 3 sets of circles, each living in a different 2D subspace. I then did guess-and-check to see if I could map on pairs of singular vectors onto the 3 sets of circles. I arrived at a pretty good guess:
+
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/mlp_acts_W_down_guessed.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
+
+And I tried to see what these 2 singular vectors of `W_down` corresponded to in terms of the singular vectors of the MLP activations, so I plotted the cosine similarity between each pair of `W_down` rows (i.e. singular vectors `[3, 5], [1, 2], [0, 4]`) and the first 6 (arbitrarily chosen) singular vectors of the MLP activations:
+
+
+<img src = "../../images/llm_arithmetic/similar_to_dims_3_4.png" alt="W_down similar to dims 3 and 4" width="100%">
+*The relevant `W_down` Rows are Similar to 3rd and 4th top Singular Vectors of `MLP_activations`*
+
+And here I can see that it largely ignored the plane of orbit (first 2 PCs of MLP activations) and **focused instead on the vertical axis (3rd PC of MLP activations) and the mysterious 4th singular vector** of MLP activations.
+
+So, what if we just visualized the MLP activations in their 3rd and 4th PCs?
+
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/mlp_acts_2nd_2_PCs.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
+
+We get the purely rotational (as opposed to revolutionary) circles. And this is how we know that the rotational components are the 3rd and 4th PCs.
+
+## 9.6. Summary: MLP Just Focuses On Rotational Component
+
+The TLDR from ["Section 9.5"](#95-discovering-the-relevance-of-fourth-pc) is that the MLP block magnifies and focuses on the 3rd and 4th PCs of each set of Fourier-Inferred 2D bases (1 set per k-Hz circle). These ('magnifies', 'focuses', 'PCs', 'Fourier-Inferred 2D bases') are all a chain of linear / affine operations, and the last animation of Section 9.5 pretty much shows the rotating ring that is fed into the final transformation matrixx: `W_U`, up to some minor translation and perturbations.
+
+To be sure, let's look at the circles that `W_U` gets to see (i.e. the `MLP_output` vectors):
+
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/W_U_input_circles.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
+
+# 10. Read-Out Transformation: `W_U`
+
+By now it should be pretty obvious that `W_U` (I'll call this "decoder") simply has to align itself with the circles found in the MLP output space.
+
+What do I mean by this? Let's look at some examples of how the row of `W_U` corresponding to the expected answer lines up with the MLP output vectors for the `=` tokens for some `a` and `b` pairs:
+
+## 70 + 108 = 65
+<img src = "../../images/llm_arithmetic/70_108_65.png" alt="70 + 108 = 65" width="100%">
+*(a = 70) + (b = 108) = 65*
+
+## 70 + 13 = 83
+<img src = "../../images/llm_arithmetic/70_13_83.png" alt="70 + 13 = 83" width="100%">
+*(a = 70) + (b = 13) = 83*
+
+Remember that each colored dot represents a different value of `b`. You can see that for any chosen `b` value, that dot will be relatively highly in the direction of `W_L[{expected_answer}]` (call this **"highly activating of the correct answer"**). It doesn't matter that it's not the dot that's the MOST in the direction of `W_L[{expected_answer}]`, because it is unlikely that its competitors will also be highly activating of the correct answer in the other circles, because the circles are of unsynchronized frequencies, and ultimately the cumulative effects of alignment across all circles will still favor the correct answer.
+
+# 11. Implications on Circle Multiplicities and Frequencies
+
+## 11.1. How Many Circles?
+
+How many circles must the model learn, and what kinds of frequencies must the circles have?
+
+Theoretically, the model could learn just 1 circle, and have the frequency be 1 Hz. However, this circle would have to be PERFECT, i.e. all the embeddings sit nicely on the perimeter of the circle, such that every point is linearly separable from the rest. This way, you can define rows of `W_L` that can cleanly align with the correct embeddings, meaning that the `MLP_out` embedding for `=` for a certain `(a, b)` pair will be the **most highly activating** embedding of the correct row of `W_L`.
+
+However, having just 1 circle is not possible. This is due to the fact that these circles have to rotate / revolve, and such rotation / revolution is only possible due to the circles being a summation of multiple petal structures, and to have multiple petal structures, you must have $>= 2$ attention heads, with each attention head having different attention frequencies, which necessitates $>= 2$ embedding circles, each with different frequencies.
+
+## 11.2. Relationship of Circle Frequencies
+
+Remember that circles (given that they are circles) can be defined by either their sine or cosine component. These circle frequencies must be such that the summed sine (or cosine) wave functions have frequency 1 (one circle is completed over P tokens). The requirement is that $P \times \text{GreatestCommonDivisor}(k_1, k_2, \cdots,) = 1$. The easiest way to achieve this is to just have the frequencies (or periods) be co-prime, and can be done with just 2 circles.
