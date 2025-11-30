@@ -1,7 +1,7 @@
 ---
 published: true
 title: Complexity Series (1 / 3) - LLM Arithmetic
-date: 2025-11-04 00:00:00 -500
+date: 2025-11-30 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]
 math: true
