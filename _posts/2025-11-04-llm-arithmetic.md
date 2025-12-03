@@ -437,25 +437,40 @@ This is quite amazing. The petals structure seems to have disappeared in the agg
 
 With such a dominant 4 Hz component, we are confident that the circle in the red plot is indeed a circle and not some complex petal-shaped curve. So, it's interesting that **these complex petal-shaped curves have recombined to give a circle!**
 
+The same thing happens for the 2D subspaces corresponding to the other embedding circles. More visualizations in the next section.
+
+# 7.2. Petals Shift Over Increasing `a` to Give Moving Circle
+
+For this next section, I don't want to just focus on any one given value of `a`. I want to traverse a sample sequence of `a` values and animate how these petal shapes change as `a` increases, and how they still sum to a circle, and how the circle moves around.
+
+## 4 Hz Circle
+
+Starting with the 4 Hz Circle:
+
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/petal_summation_4_hz.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
+
 ## 32 Hz Circle Subspace
 
-The same happens for the 2D subspaces corresponding to the other embedding circles. Here are the plots for the 32 Hz embedding circle:
-
-<img src = "../../images/llm_arithmetic/aggregation_of_petals_32hz.png" alt="Aggregation of Petals in 32 Hz" width="100%"> 
-*`o`-vectors corresponding to Fourier-Inferred 2D subspace (32 Hz Embedding Circle), head-wise and summed*
-
-<img src = "../../images/llm_arithmetic/aggregation_of_petals_32hz_fourier.png" alt="Aggregation of Petals in 32 Hz" width="100%"> 
-*Fourier Coefficient Norms for Projected `o` vectors (32 Hz subspace)*
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/petal_summation_32_hz.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
 
 ## 43 Hz Circle Subspace
 
-And the 43 Hz embedding circle:
-
-<img src = "../../images/llm_arithmetic/aggregation_of_petals_43hz.png" alt="Aggregation of Petals in 43 Hz" width="100%"> 
-*`o`-vectors corresponding to Fourier-Inferred 2D Subspace (43 Hz Embedding Circle), head-wise and summed*
-
-<img src = "../../images/llm_arithmetic/aggregation_of_petals_43hz_fourier.png" alt="Aggregation of Petals in 43 Hz" width="100%"> 
-*Fourier Coefficient Norms for Projected `o` vectors (43 Hz subspace)*
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/petal_summation_43_hz.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
 
 ## Alternative Visualization
 
@@ -557,7 +572,7 @@ This means that the computation of the circles output by the attention block are
 
 ## 9.2. `o` Circles Revolve Around
 
-Let's try to plot the circles - and actually, let's animate them to see how they move. Here's how to interpret the following animation:
+In ["Section 7.2"](#72-petals-shift-over-increasing-a-to-give-moving-circle), we already discovered that there are circles in the `o` space, and that **they move around**. Let's have another look at the overall circles (without considering the petals) to **see how they move**. The following animation is similar to before, but here's how to interpret it anyway:
 - 1 frame corresponds to 1 value of `a`
 - Each point in a single frame represents the `o` vector of the `=` token for a particular `(a, b)` pair. We plot every value of `b` for this value of `a`, so each circle is made up of 113 points.
 - The gradient of each circle represents the increasing values of `b`.
