@@ -18,9 +18,9 @@ The first method is the "Clock" method, but because the description of the mecha
 
 # 1. Objective
 
-The Clock algorithm is interesting because is admits an intuitively simple description: LLMs encode some periodic mechanism that conveniently captures the periodic nature of written numbers (digits go from 0 to 9 before wrapping around and repeating), and this periodic mechanism allows it to accurately perform simple or modulo addition. In the case of modulo arithmetic, the mental image this evokes is simple and beautiful; e.g. LLMs represent numbers on a circle much like a clock, and doing `(10 + 6) % 12 = 4`, much like how "10 o'clock + 6 hours = 4 o'clock."
+The Clock algorithm is interesting because it admits an intuitively simple description: LLMs encode some periodic mechanism that conveniently captures the periodic nature of written numbers (digits go from 0 to 9 before wrapping around and repeating), and this periodic mechanism allows it to accurately perform simple or modulo addition. In the case of modulo arithmetic, the mental image this evokes is simple and beautiful; e.g. LLMs represent numbers on a circle much like a clock, and doing `(10 + 6) % 12 = 4`, much like how "10 o'clock + 6 hours = 4 o'clock."
 
-Indeed, in both the Kantamneni and Nanda papers, the authors demonstrate proof that this circular representation of numbers actually exist in models specifically trained to perform simple / modulo arithmetic. Both papers also go on to use ablations, activation patching, and other methods to identify parts of the model that MUST be involved in the arithmetic computation, and essentially rely on modus tollens (if ablate out sine and cosine components, model performance goes to shit, therefore periodic structure must there) to numerically justify that the model must be using this periodic representational structure to perform the addition. **However, they still don't quite fully paint a picture of how the model is "reading out" the answer, or how the clock is actually rotating.** For example, what happens to the representation (both pre-attention and post-attention) of the `=` token (i.e. the prediction for the answer) when you increase `b` by some known amount, and specifically how do the MLP embedding and unembedding matrices handle such a change to give a correct answer still? **This is insufficiently useful in giving us a deep understanding for how the models are manipulating said periodic structures.**
+Indeed, in both the Kantamneni and Nanda papers, the authors demonstrate proof that this circular representation of numbers actually exist in models specifically trained to perform simple / modulo arithmetic. Both papers also go on to use ablations, activation patching, and other methods to identify parts of the model that MUST be involved in the arithmetic computation, and essentially rely on modus tollens (if ablate out sine and cosine components, model performance goes to shit, therefore periodic structure must be there) to numerically justify that the model must be using this periodic representational structure to perform the addition. **However, they still don't quite fully paint a picture of how the model is "reading out" the answer, or how the clock is actually rotating.** For example, what happens to the representation (both pre-attention and post-attention) of the `=` token (i.e. the prediction for the answer) when you increase `b` by some known amount, and specifically how do the MLP embedding and unembedding matrices handle such a change to give a correct answer still? **This is insufficiently useful in giving us a deep understanding for how the models are manipulating said periodic structures.**
 
 This post aims to re-construct the Modulo Arithmetic Paper with special focus on:
 
@@ -42,7 +42,7 @@ To restate the paper's model task, a simple **1-layer Transformer** is trained t
 
 # 2.1. Exact Inputs and Outputs
 
-The model is trained on simple input triplets of tokens: `(token_A, token_B, token_C)`, where `token_C` is ALWAYS token index `113`, which represents the `=` sign. `token_A` and `token_B` will simple be the index of the number they represent, i.e. token index `0` represents the number 0, token `42` represents the token 42, and so on.
+The model is trained on simple input triplets of tokens: `(token_A, token_B, token_C)`, where `token_C` is ALWAYS token index `113`, which represents the `=` sign. `token_A` and `token_B` will simply be the index of the number they represent, i.e. token index `0` represents the number 0, token `42` represents the token 42, and so on.
 
 > Sometimes I'll refer to `triplets` as `pairs` since only `token_A` and `token_B` are meaningfully variable.
 
@@ -220,7 +220,7 @@ I should mention that the original paper chose to visualize $W_U W_\text{down}$,
 
 # 6. What Are The Attention Heads Doing?
 
-The next step in figuring out how the model makes use of these circles is to figure out how the circles connect to the MLP block. Let's take a look at the attention maps for 6 samples pairs for all 4 heads:
+The next step in figuring out how the model makes use of these circles is to figure out how the circles connect to the MLP block. Let's take a look at the attention maps for 6 sample pairs for all 4 heads:
 
 <img src = "../../images/llm_arithmetic/rubbish_attn_maps.png" alt="Rubbish attention maps" width="500px"> 
 *Attention Maps for 6 randomly sampled pairs*
@@ -243,10 +243,10 @@ And we see here that the attention maps are indeed periodic! As a bonus, let's t
 
 You can see that the key frequencies 4, 32, and 43, are distributed over the heads. Some interesting observations include:
 - Head 1 is most attuned to the frequency 4, which we can see from the attention maps
-- Head 2 and Head 3 are most attuned to the frequencies 43 and 32 respectively, we we can also see from the attention maps
+- Head 2 and Head 3 are most attuned to the frequencies 43 and 32 respectively, which we can also see from the attention maps
 - Head 0 has high-norm coefficients in multiple frequencies, including several non-key frequencies, which interfere to give a non-sinusoidal pattern, which we can also see from the attention maps. It is unclear if the attenuation to multiple frequencies plays some crucial role, or if they're simply not yet sufficiently decayed.
 
-Crucially, now's also a good time to point out that the **attention patterns are not just periodic when varying `b`, but also when varying `a`.** This makes sense because `a` and `b` are embedded using the sample `W_E` matrix, meaning that they both use the same circle structures in `W_E`. To see this, we can just visualize the attention score of `a` (or `b`, since they approximately sum to 1; I just arbitrarily chose `a`) in the last row, for all `(a, b)` pairs:
+Crucially, now's also a good time to point out that the **attention patterns are not just periodic when varying `b`, but also when varying `a`.** This makes sense because `a` and `b` are embedded using the same `W_E` matrix, meaning that they both use the same circle structures in `W_E`. To see this, we can just visualize the attention score of `a` (or `b`, since they approximately sum to 1; I just arbitrarily chose `a`) in the last row, for all `(a, b)` pairs:
 
 <img src = "../../images/llm_arithmetic/full_p_by_p_plot.png" alt="Full Attention Map" width="100%"> 
 *Attention Maps are Periodic in 'a' and 'b'*
@@ -310,7 +310,7 @@ In fact, depending on how many wavelengths the attention coefficient $\alpha$ is
 </div>
 <br/>
 
-**When the circle (embedding) frequency differs from the attention frequency, we also get different families of curves.** Below, I illustrate what the attention output ($z$ or $v$; since $z$ vectors are just weighted sums of $v$ vectors, $z$-space and $v$-space are equivalent)) space looks like when we focus on the dimensions in which the periodicity is different from what the attention heads are attuned to.
+**When the circle (embedding) frequency differs from the attention frequency, we also get different families of curves.** Below, I illustrate what the attention output ($z$ or $v$; since $z$ vectors are just weighted sums of $v$ vectors, $z$-space and $v$-space are equivalent) space looks like when we focus on the dimensions in which the periodicity is different from what the attention heads are attuned to.
 
 <div style="display: flex; justify-content: center;">
     <video width="100%" autoplay loop muted playsinline>
@@ -321,7 +321,7 @@ In fact, depending on how many wavelengths the attention coefficient $\alpha$ is
 
 You will see the characteristic **petal shapes** in all combinations of embedding and attention frequencies. Though not super relevant, I'd point out that when the attention frequency (alpha) is lower than the embedding frequency, you get petals that overlap, whereas when it's above, you get petals that don't overlap.
 
-> A friend Jacob said they're reminiscent of trigonometric polar graphs; indeed, the construction of these curves are different but quite similar, and I wonder if there is some profound connection here.
+> A friend Jacob said they're reminiscent of trigonometric polar graphs; indeed, the construction of these curves is different but quite similar, and I wonder if there is some profound connection here.
 
 # 6.2. Petals in Attention Outputs (z; before `W_O`)?
 
@@ -373,7 +373,7 @@ projected        = z_values @ new_basis     # shape (113, 2)
 Above, we predicted that when the embedding circle frequency (4 Hz) is the same as the attention frequency (4 Hz), we'll get this:
 
 <img src = "../../images/llm_arithmetic/prediction_4hz_4hz.png" alt="Prediction: 4Hz circle, 4Hz attention" width="500px"> 
-*Periodicted z pattern in 4 Hz circle space, for 4 Hz attention frequency*
+*Predicted z pattern in 4 Hz circle space, for 4 Hz attention frequency*
 
 Let's see what actual embeddings we get:
 
@@ -387,7 +387,7 @@ Let's try another `(attention_head, subspace)` pair. Let's try head 3 (attention
 Prediction:
 
 <img src = "../../images/llm_arithmetic/prediction_4hz_32hz.png" alt="Prediction: 4Hz circle, 32Hz attention" width="500px"> 
-*Periodicted z pattern in Fourier-Inferred 2D Basis (4 Hz circle), for 32 Hz attention frequency*
+*Predicted z pattern in Fourier-Inferred 2D Basis (4 Hz circle), for 32 Hz attention frequency*
 
 Actual:
 
@@ -401,7 +401,7 @@ Another one still!
 Prediction:
 
 <img src = "../../images/llm_arithmetic/prediction_32hz_4hz.png" alt="Prediction: 32Hz circle, 4Hz attention" width="500px"> 
-*Periodicted z pattern in Fourier-Inferred 2D Basis (32 Hz circle), for 4 Hz attention frequency*
+*Predicted z pattern in Fourier-Inferred 2D Basis (32 Hz circle), for 4 Hz attention frequency*
 
 Actual:
 
@@ -430,7 +430,7 @@ Let's see how the different heads combine to give a final pattern.
 <img src = "../../images/llm_arithmetic/aggregation_of_petals_4hz.png" alt="Aggregation of Petals in 4 Hz" width="100%"> 
 *`o`-vectors corresponding to Fourier-Inferred 2D Subspace (4 Hz Embedding Circle), head-wise and summed*
 
-This is quite amazing. The petals structure seems to have disappeared in the aggregate $o$ vectors (red plot), to give a circle! The circle looks very wiggly, and I suspected that it could either be not a circle in actuality, or that it could merely be an artifact of the interpolation being too expressive / overfitting the points, just like in the attn head 1 plot. To be sure, I did a Fourier Decomposition and plotted the norms of the coefficients for each coefficient again for the red points:
+This is quite amazing. The petal structures seems to have disappeared in the aggregate $o$ vectors (red plot), to give a circle! The circle looks very wiggly, and I suspected that it could either be not a circle in actuality, or that it could merely be an artifact of the interpolation being too expressive / overfitting the points, just like in the attn head 1 plot. To be sure, I did a Fourier Decomposition and plotted the norms of the coefficients for each coefficient again for the red points:
 
 <img src = "../../images/llm_arithmetic/aggregation_of_petals_4hz_fourier.png" alt="Aggregation of Petals in 4 Hz" width="100%"> 
 *Fourier Coefficient Norms for Projected `o` vectors*
@@ -497,7 +497,7 @@ To state what we've observed so far in simple terms:
 
 The above would be a neat argument for why periodic embeddings are learnt, and why there are circles of MULTIPLE frequencies, not just one.
 
-For now, this argumentation remains out of scope of this blog post and we will simply operate from the fact the petal structures just coalesce to form a simple circle again.
+For now, this argumentation remains out of scope of this blog post and we will simply operate from the fact that the petal structures just coalesce to form a simple circle again.
 
 # 8. How Does MLP Use These Circles?
 
@@ -543,7 +543,7 @@ And indeed, when we plot the 512 columns of `W_up` in the 2D subspaces that we e
 
 ## The MLP Layer Is Just An Affine Transformation
 
-Following the argumentation that `d_model = 128` is already sufficient dimensions to encode the 113 features without superposition, **the job of the MLP layer isn't to exploit $\text{ReLU}$ to arrange features in a superposition, but to actually shift the circles into the positive orthant such that they are NOT affected by $\text{ReLU}$.** What this entails adding some offset (which can be done by `b_up`). Here's some visual intuition:
+Following the argumentation that `d_model = 128` is already sufficient dimensions to encode the 113 features without superposition, **the job of the MLP layer isn't to exploit $\text{ReLU}$ to arrange features in a superposition, but to actually shift the circles into the positive orthant such that they are NOT affected by $\text{ReLU}$.** What this entails is adding some offset (which can be done by `b_up`). Here's some visual intuition:
 
 <img src = "../../images/llm_arithmetic/mlp_shift.png" alt="b_up sorted" width="100%"> 
 *MLP just has to move Circle into Positive Orthant; ReLU not necessary*
@@ -589,9 +589,9 @@ In [Section 7.2](#72-petals-shift-over-increasing-a-to-give-moving-circle), we a
 
 ## 9.3. `o` Circles Rotate
 
-> Henceforth, any mention of **"Singular Vectors" will be interchangeable with "Principle Components"**
+> Henceforth, any mention of **"Singular Vectors" will be interchangeable with "Principal Components"**
 
-It turns out that **this is a rather misleading way to look at the movement of the circles.** Using the Fourier Coefficients to infer a 2D basis for each circle ensures that you will see the circle, but misses out on extra important information. If we were to collect all the pairs of 2D basis vectors (one per value of `a`), we now have a collection of `2 * len(sample_a_values)` vectors, each being `d_model`-dimensional. If we were to take the Singular Value Decomposition (SVD) of this set of vectors and take the top 2 Singular Vectors / Principle Components (PCs), we would see the circles head-on, much like in the above animations. This is because by construction, the set of `d_model`-dimensional basis vectors we've collected prioritize the visibility of the circles. However, now that we have the **entire set** of basis vector pairs, the subsequent singular vectors also capture how the circle orientations (i.e. the surface on which the circle lies) change as `a` changes. **It turns out that PCs 3 and 4 (or `2` and `3`, 0-indexed) are actually very important too**, and I'll explain the reason later. For now, I simply present these dimensions of the circles:
+It turns out that **this is a rather misleading way to look at the movement of the circles.** Using the Fourier Coefficients to infer a 2D basis for each circle ensures that you will see the circle, but misses out on extra important information. If we were to collect all the pairs of 2D basis vectors (one per value of `a`), we now have a collection of `2 * len(sample_a_values)` vectors, each being `d_model`-dimensional. If we were to take the Singular Value Decomposition (SVD) of this set of vectors and take the top 2 Singular Vectors / Principal Components (PCs), we would see the circles head-on, much like in the above animations. This is because by construction, the set of `d_model`-dimensional basis vectors we've collected prioritize the visibility of the circles. However, now that we have the **entire set** of basis vector pairs, the subsequent singular vectors also capture how the circle orientations (i.e. the surface on which the circle lies) change as `a` changes. **It turns out that PCs 3 and 4 (or `2` and `3`, 0-indexed) are actually very important too**, and I'll explain the reason later. For now, I simply present these dimensions of the circles:
 
 <div style="display: flex; justify-content: center;">
     <video width="100%" autoplay loop muted playsinline>
@@ -606,7 +606,7 @@ The key takeaway in this visualization are that:
 
 ## 9.4. Rotation + Revolution
 
-For this next part, I'll plot the circles in the MLP activation (post-$\text{ReLU}$) space, instead of the `o` space. The affine transformations in the MLP block do some stretching / reflection of the `o` space, which makes the visualizations clearer, but for the most part, the dimensions are still partitioned pretty nicely into the "Revolution Space" (first 2 Singular Vector Directions / Principle Components) and the "Rotation Space" (second 2 Principle Components). To satisfy our curiosity, let's just see what this looks like, as best as we can (in 3D), for a chosen circle (4 Hz circle). 
+For this next part, I'll plot the circles in the MLP activation (post-$\text{ReLU}$) space, instead of the `o` space. The affine transformations in the MLP block do some stretching / reflection of the `o` space, which makes the visualizations clearer, but for the most part, the dimensions are still partitioned pretty nicely into the "Revolution Space" (first 2 Singular Vector Directions / Principal Components) and the "Rotation Space" (second 2 Principal Components). To satisfy our curiosity, let's just see what this looks like, as best as we can (in 3D), for a chosen circle (4 Hz circle). 
 
 <div style="display: flex; justify-content: center;">
     <video width="100%" autoplay loop muted playsinline>
@@ -617,9 +617,9 @@ For this next part, I'll plot the circles in the MLP activation (post-$\text{ReL
 
 ## 9.5. Discovering The Relevance of Fourth PC
 
-This section is about how I discovered that the third (and fourth) Principle Components were important. Feel free to skip.
+This section is about how I discovered that the third (and fourth) Principal Components were important. Feel free to skip.
 
-If we were to stick with only the 2D visualization of the MLP Activation circles, we'd see that the circles seem to move **(revolve) around a center point that was outside the circles, without any rotation.** However, the MLP output circles (after applying `W_down` and `b_down`), the circles seem to **have no revolution (they're always in the center), but they now have a rotation.** I didn't understand how a simple affine transformation could achieve that, so I tried to examine `W_down` to see if I could construct a simplified version of it and see what it was doing.
+If we were to stick with only the 2D visualization of the MLP Activation circles, we'd see that the circles seem to move **(revolve) around a center point that was outside the circles, without any rotation.** However, the MLP output circles (after applying `W_down` and `b_down`) seem to **have no revolution (they're always in the center), but they now have a rotation.** I didn't understand how a simple affine transformation could achieve that, so I tried to examine `W_down` to see if I could construct a simplified version of it and see what it was doing.
 
 I first took a look at the singular values of `W_down`:
 
@@ -656,7 +656,7 @@ We get the purely rotational (as opposed to revolutionary) circles. And this is 
 
 ## 9.6. Summary: MLP Just Focuses On Rotational Component
 
-The TLDR from ["Section 9.5"](#95-discovering-the-relevance-of-fourth-pc) is that the MLP block magnifies and focuses on the 3rd and 4th PCs of each set of Fourier-Inferred 2D bases (1 set per k-Hz circle). These ('magnifies', 'focuses', 'PCs', 'Fourier-Inferred 2D bases') are all a chain of linear / affine operations, and the last animation of Section 9.5 pretty much shows the rotating ring that is fed into the final transformation matrixx: `W_U`, up to some minor translation and perturbations.
+The TLDR from ["Section 9.5"](#95-discovering-the-relevance-of-fourth-pc) is that the MLP block magnifies and focuses on the 3rd and 4th PCs of each set of Fourier-Inferred 2D bases (1 set per k-Hz circle). These ('magnifies', 'focuses', 'PCs', 'Fourier-Inferred 2D bases') are all a chain of linear / affine operations, and the last animation of Section 9.5 pretty much shows the rotating ring that is fed into the final transformation matrix: `W_U`, up to some minor translation and perturbations.
 
 To be sure, let's look at the circles that `W_U` gets to see (i.e. the `MLP_output` vectors):
 
