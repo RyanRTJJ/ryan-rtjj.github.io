@@ -515,7 +515,7 @@ The same thing happens for the 2D subspaces corresponding to the other embedding
 
 For this next section, I don't want to just focus on any one given value of `a`. I want to **traverse a sample sequence of `a` values** (each `a` value still has all `b` values from `[0, 113)`; that's how we have 113 points to make up each pattern) and **animate how these petal shapes change** as `a` increases, and how they **still sum to a circle**, and **how the circle moves around.** The punchline for this section is that the petal shapes **always** recombine to form a circle, and not that the circle is panning around. 
 
-**Note:** turns out, the panning around of circles is a misleading way to understand how the circles vary as `a` increases. For each of these circles, there exists another 2D subspace where the petals combine differently to still give a circle, but a circle that **rotates**, and this rotating circle is the key to modulo arithmetic computation. Because the discovery of this hidden 2D subspace is somewhat involved, I'll explain this more in Section 9.
+**Note:** turns out, the panning around of circles is an important thing to understand, but gives an incomplete picture of how the circles vary as `a` increases. For each of these circles, there exists other subspaces where the petals combine differently to still give a circle, but a circle that **rotates**, and this rotating circle is the key to modulo arithmetic computation. Because the discovery of this hidden subspace is somewhat involved, I'll explain this more in Section 9. You will see in [Section 9.6](#96-what-created-the-rotational-component) that there is some combination of the patterns in the "panning space" (visualized here) and the hidden rotational space that gives rise to the final rotational circles that are used by $W_U$ to perform the read-out of the correct answer.
 
 ## 4 Hz Circle
 
@@ -556,7 +556,7 @@ Now that we know that these 4 Hz, 32 Hz, and 43 Hz circles exist in the $o$ vect
 I make no comment on why the 43 Hz Circle looks so stretched.
 > I may have missed a normalization factor somewhere. &#x1F642;
 
-# 7.2. Why?
+# 7.3. Why?
 
 To state what we've observed so far in simple terms:
 - We observed periodic (circular) embeddings
@@ -636,7 +636,7 @@ To reiterate, since the MLP block doesn't actually introduce any meaningful non-
 <img src = "../../images/llm_arithmetic/found_the_circles_mlp_acts.png" alt="Embeddings in Circle Spaces within MLP activations" width="100%">
 *Circles are still there in MLP Activations*
 
-## 9.1. Rotation of Circles
+# 9. Rotation of Circles
 
 Now, we know that:
 - The number embeddings are periodic, which means that attention values (for any given `a`, for all `(a, b)` pairs) are also periodic
@@ -645,9 +645,9 @@ Now, we know that:
 - The MLP block is just an affine transformation. This transformation is NOT a function of input data.
 - The rows of `W_L` are probes / detectors that infer the answer depending on which numbers in the number circle the rows align most with. The rows of `W_L` are NOT a function of input data.
 
-This means that the computation of the circles output by the attention block are ALL of the meaningful computation of the answer to `(a + b) % P = ?`. Since this circle has to align with the correct rows of `W_L`, when we try different values of `a` and `b`, we should expect to observe that these circles are rotating in some way. 
+This means that the computation of the circles output by the attention block are ALL of the meaningful computation of the answer to `(a + b) % P = ?`. **Since this circle has to align with the correct rows of `W_L`**, when we try different values of `a` and `b`, we **should expect to observe that these circles are rotating** in some way. 
 
-## 9.2. `o` Circles Revolve Around
+# 9.1. `o` Circles Revolve Around
 
 In [Section 7.2](#72-petals-shift-over-increasing-a-to-give-moving-circle), we already discovered that there are circles in the `o` space, and that **they move around**. Let's have another look at the overall circles (without considering the petals) to **see how they move**. The following animation is similar to before, but here's how to interpret it anyway:
 - 1 frame corresponds to 1 value of `a`
@@ -664,7 +664,7 @@ In [Section 7.2](#72-petals-shift-over-increasing-a-to-give-moving-circle), we a
 
 **As you can see, the circles are not rotating. However, they seem to be sliding around the various quadrants / revolving around the origin.** Now's also a good time to remember how these circles were formed - the summation of petal structures (1 per head). The petals are themselves the trajectories traced out by various interpolations between 2 points on the embedding circle (or columns of $W_E$; animation in [Section 6.1](#61-periodic-attention-on-periodic-embeddings)), which means these individual petal structures are strictly within the confines of the embedding circle. The summation of the petal structures (these circles above) should also hence be within the confines of the embedding circle, magnified by `{num_heads}` times at most. In this case, you see that the colorful circles are orbiting within the confines of the embedding circle (grey dots).
 
-## 9.3. `o` Circles Rotate
+# 9.2. `o` Circles Rotate
 
 > Henceforth, any mention of **"Singular Vectors" will be interchangeable with "Principal Components"**
 
@@ -681,7 +681,7 @@ The key takeaway in this visualization are that:
 - The orbit isn't as pronounced. One may conclude that either **there's no orbit**, or if there is, instead of orbiting a center that is outside the circle, the center is now inside the circle.
 - **There is rotation (!!!)**
 
-## 9.4. Rotation + Revolution
+# 9.3. Rotation + Revolution
 
 For this next part, I'll plot the circles in the MLP activation (post-$\text{ReLU}$) space, instead of the `o` space. The affine transformations in the MLP block do some stretching / reflection of the `o` space, which makes the visualizations clearer, but for the most part, the dimensions are still partitioned pretty nicely into the "Revolution Space" (first 2 Singular Vector Directions / Principal Components) and the "Rotation Space" (second 2 Principal Components). To satisfy our curiosity, let's just see what this looks like, as best as we can (in 3D), for a chosen circle (4 Hz circle). 
 
@@ -692,7 +692,7 @@ For this next part, I'll plot the circles in the MLP activation (post-$\text{ReL
 </div>
 <br/>
 
-## 9.5. Discovering The Relevance of Fourth PC
+# 9.4. Discovering The Relevance of Fourth PC
 
 This section is about how I discovered that the third (and fourth) Principal Components were important. Feel free to skip.
 
@@ -731,9 +731,9 @@ So, what if we just visualized the MLP activations in their 3rd and 4th PCs?
 
 We get the purely rotational (as opposed to revolutionary) circles. And this is how we know that the rotational components are the 3rd and 4th PCs.
 
-## 9.6. Summary: MLP Just Focuses On Rotational Component
+# 9.5. Summary: MLP Just Focuses On Rotational Component
 
-The TLDR from ["Section 9.5"](#95-discovering-the-relevance-of-fourth-pc) is that the MLP block magnifies and focuses on the 3rd and 4th PCs of each set of Fourier-Inferred 2D bases (1 set per k-Hz circle). These ('magnifies', 'focuses', 'PCs', 'Fourier-Inferred 2D bases') are all a chain of linear / affine operations, and the last animation of Section 9.5 pretty much shows the rotating ring that is fed into the final transformation matrix: `W_U`, up to some minor translation and perturbations.
+The TLDR from ["Section 9.4"](#94-discovering-the-relevance-of-fourth-pc) is that the MLP block magnifies and focuses on the 3rd and 4th PCs of each set of Fourier-Inferred 2D bases (1 set per k-Hz circle). These ('magnifies', 'focuses', 'PCs', 'Fourier-Inferred 2D bases') are all a chain of linear / affine operations, and the last animation of Section 9.4 pretty much shows the rotating ring that is fed into the final transformation matrix: `W_U`, up to some minor translation and perturbations.
 
 To be sure, let's look at the circles that `W_U` gets to see (i.e. the `MLP_output` vectors):
 
@@ -744,7 +744,7 @@ To be sure, let's look at the circles that `W_U` gets to see (i.e. the `MLP_outp
 </div>
 <br/>
 
-## 9.7. What Created The Rotational Component?
+# 9.6. What Created The Rotational Component?
 
 We saw that the rotation circles were present in the MLP activation vectors, and also the $o$ vectors. This means that the attention block, which generates the $o$ vectors, created the rotating circles. However, previously in [Section 7.2](#72-petals-shift-over-increasing-a-to-give-moving-circle), we visualized a 2D subspace that showed us a revolving (and not rotating) circle. What's left is just to see how the rotating circles got created by the attention block.
 
@@ -754,7 +754,7 @@ Well, we know that the **rotating circles lived in a somewhat unexpected 2D subs
 
 <div style="display: flex; justify-content: center;">
     <video width="100%" autoplay loop muted playsinline>
-        <source src="../../images/llm_arithmetic/rotational_attn_outputs.mov" type="video/mp4">
+        <source src="../../images/llm_arithmetic/rotational_attn_outputs_fast.mov" type="video/mp4">
     </video>
 </div>
 <br/>
@@ -763,7 +763,19 @@ Let's interpret this:
 - You can still see the characteristic petal shapes per head. This is expected we're merely adopting another point of view, compared to [Section 7.2](#72-petals-shift-over-increasing-a-to-give-moving-circle)
 - The orientation of the petals are no longer the same across heads. To observe this, let's focus on the 4 Hz circle. We see that in attention heads 0, 2, and 3, the start of the petal structure (red points meeting the blue points) are facing the right, whereas in attention head 1, the start of the petal structure is facing up. This is in contrast to [Section 7.2](#72-petals-shift-over-increasing-a-to-give-moving-circle), where the petal structures in all heads had the same orientation.
 
-I'll reiterate that the first 4 columns literally sum (**simple sum**) to give the last column. Without getting too into the weeds, it is obvious **that the combination of different orientations and scales of these petal structures** allow for these various petal structures **to sum into a rotating circle**.
+I'll reiterate that the first 4 columns literally sum (**simple sum**) to give the last column. Without getting too into the weeds, it is obvious **that the combination of different orientations and scales of these petal structures** allow for these various petal structures **to sum to a rotating circle**.
+
+We've observed first hand how these strictly panning, non-rotational components can sum to a rotational circle. We hence can also assume that the panning components visualized in [Section 7.2](#72-petals-shift-over-increasing-a-to-give-moving-circle) contribute to this summation to make the eventual rotating circles we visualized in the MLP activation vectors ([Section 9.4](#94-discovering-the-relevance-of-fourth-pc), [Section 9.5](#95-summary-mlp-just-focuses-on-rotational-component)), which are much more regular and circular.
+
+Indeed, **if we were to ablate (project out) the first 4 principle components from the attention outputs** using this matrix:
+
+$$
+\begin{align*}
+M_\text{ablate} = (I - X(X^\top X)^{-1}X^\top)
+\end{align*}
+$$
+
+where the columns of $X$ contained the top 4 PCs collected from the set of Fourier-Inferred 2D basis (either from MLP activations or pre-ReLU vectors) for each circle frequency (hence a total of 12 vectors), we see the **test accuracy drop from 100% to 0.91%**, or a score of 116 / 12769, which is **chance.**
 
 So there we have it. The meat of the entire computation (i.e. formation of circles that can rotate), other than the embedding and read-out function, was basically done in the attention block.
 
