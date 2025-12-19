@@ -14,20 +14,26 @@ To get started, I want to do a deep dive on known algorithms that Transformers h
 - Bag of Heuristics ([Nikankin et. al](https://arxiv.org/pdf/2410.21272), [Anthropic](https://transformer-circuits.pub/2025/attribution-graphs/methods.html#graphs-addition))
 - Digit-wise and Carry-over Circuits ([Quirke and Barez](https://arxiv.org/pdf/2310.13121#:~:text=Further%2C%20while%20simple%20arithmetic%20tasks,for%20AI%20safety%20and%20alignment.))
 
-The first method is the "Clock" method, but because the description of the mechanics of the "Clock" in the Tegmark paper is unexplicit and imprecise to the point of being inadmissible to rigorous scrutiny, we will look at the preceding paper - [Progress Measures For Grokking Via Mechanistic Interpretability](https://openreview.net/pdf?id=9XFSbDPmdW) - which introduces the original Clock algorithm alluded to by Nanda et. al in , henceforth referred to as just the _Modulo Arithmetic Paper_.
+The first method is the "Clock" method. The **Kantamneni paper has a number of shortcomings** that severely kneecap its ability to explain mechanistically how the various components that they discover in the model (chiefly, the "number helix") are used to perform the end computation of $a + b$, but does explicitly mention how they discovered the number helix (or, if you remove the linear component from the helix, it becomes a number circle). This makes it somewhat of a **mimicry of a preceding paper** - [Progress Measures For Grokking Via Mechanistic Interpretability](https://openreview.net/pdf?id=9XFSbDPmdW) - in terms of its contribution, except that it focuses on a cousin problem (general arithemtic and not modulo arithmetic), and **on a more complex model**.
+
+[Progress Measures For Grokking Via Mechanistic Interpretability](https://openreview.net/pdf?id=9XFSbDPmdW) (henceforth referred to as the **Nanda paper**) is the original paper which **introduces the Clock algorithm**. It focuses on **modulo arithmetic** ($(a + b) \mod P = ?$) and uses a **much simpler model** (1 layer Transformer with no layer normalization and effectively no positional encodings as they turned out to be irrelevant). The Nanda paper **also suffers from the same limitations** that kneecap its ability to explain mechanistically how the number circle is used. Yes, they **prove the existence of periodic components (number circles)** through Fourier Decompositions, and are able to **argue Modus-Tollens style** (by ablating these periodic components out and seeing model performance drop completely to chance) that **these periodic components are indeed crucial** to the computation of modulo arithmetic, but this **isn't quite sufficient** to gain a deep, intuitive, and mechanistic understanding of just how the number circles are formed and used.
+
+It is this **deep, intuitive, and mechanistic understanding of how the circles are *formed and used*** that allows us to really understand this flavor of computational circuitry, and to even begin to make arguments (even if just hand-wavy) of the **robustness of such circuitry, its failure modes, and how to improve on them**. For this reason, this blogpost will be all about **really diving deep into the circuitry of modulo arithmetic**, using the same problem setup and model as the Nanda paper, but going far deeper and more explicit than the paper does.
 
 # 1. Objective
 
-The Clock algorithm is interesting because it admits an intuitively simple description: LLMs encode some periodic mechanism that conveniently captures the periodic nature of written numbers (digits go from 0 to 9 before wrapping around and repeating), and this periodic mechanism allows it to accurately perform simple or modulo addition. In the case of modulo arithmetic, the mental image this evokes is simple and beautiful; e.g. LLMs represent numbers on a circle much like a clock, and doing `(10 + 6) % 12 = 4`, much like how "10 o'clock + 6 hours = 4 o'clock."
+The idea of the Clock algorithm is this: a 1-layer transformer model trained to do modulo arithmetic learns how to **encode numbers not as a number line** in its weight space, **but as a number circle** (in fact, multiple number circles). This algorithm is interesting because it appeals to the intuitive idea that written numbers that we humans use have periodic patterns (e.g. digits go from 0 to 9 before wrapping around and repeating), and so, representing numbers in a cyclic mechanism could allow models to accurately perform simple or modulo addition. In the case of modulo arithmetic, the mental image this evokes is simple and beautiful; e.g. LLMs represent numbers on a circle much like a clock, and doing `(10 + 6) % 12 = 4`, much like how "10 o'clock + 6 hours = 4 o'clock."
 
-Indeed, in both the Kantamneni and Nanda papers, the authors demonstrate proof that this circular representation of numbers actually exist in models specifically trained to perform simple / modulo arithmetic. Both papers also go on to use ablations, activation patching, and other methods to identify parts of the model that MUST be involved in the arithmetic computation, and essentially rely on modus tollens (if ablate out sine and cosine components, model performance goes to shit, therefore periodic structure must be there) to numerically justify that the model must be using this periodic representational structure to perform the addition. **However, they still don't quite fully paint a picture of how the model is "reading out" the answer, or how the clock is actually rotating.** For example, what happens to the representation (both pre-attention and post-attention) of the `=` token (i.e. the prediction for the answer) when you increase `b` by some known amount, and specifically how do the MLP embedding and unembedding matrices handle such a change to give a correct answer still? **This is insufficiently useful in giving us a deep understanding for how the models are manipulating said periodic structures.**
+As mentioned, in both the Kantamneni and Nanda papers, the authors demonstrate proof that this circular representation of numbers actually exist (via Fourier Decompositions of embedding weights) in models specifically trained to perform simple / modulo arithmetic. Both papers also go on to use ablations, activation patching, and other methods to identify parts of the model that MUST be involved in the arithmetic computation, and essentially argue, modus tollens, that these circular components (and also select MLP neurons in the Kantamneni paper) are crucial to the computation. The result they present is simply that these components are used, and not how. That is to say, **they still don't quite fully paint a picture of how the model is "reading out" the answer, or how the clock is actually transforming / rotating and used in the various parts of the model.**
 
-This post aims to re-construct the Modulo Arithmetic Paper with special focus on:
+For example, they establish that the columns of the embedding matrix $W_E$ (i.e. dictionary matrix) contain circular structures - that is to say, both `a` and `b` in "$(a + b) \mod P = ?$" will take on some point in these circles. However, how does the attention block transform and mix their representations? Attention is very obviously a non-linear transformation - how is it that we still see circles (spoiler: we do) after going through the attention block? How do these patterns change when we vary `a` and `b`? What computation is the MLP (specifically, the $\text{ReLU}$ non-linearity) block conceptually doing and how does that help the read-out function that is performed by the un-embedding matrix $W_U$?
+
+I think that researchers (myself included) who intend to build on computational circuitry discovery with respect to interesting structures in embedding weights (circles in this case) should feel very uneasy about the lack of clarity here; **how will you make predictions** on things like **effects of architectural changes** or **sufficiency conditions to be able to solve a class of problems** if you cannot write a mechanistic description of existing "known" algorithms? Hence, this **post aims to re-construct the Modulo Arithmetic Paper with special focus on:**
 
 > &#x2705; = Replication. &#x2B50; = Novel Contribution.
 
-- &#x2705; Confirming that $W_E$, $W_L = W_U W_\text{down}$ contain circles and visualizing them
-- &#x2B50; Investigating and illustrating what the attention block is doing to the original circles in $W_E$
+- &#x2705; Confirming that $W_E$, $W_L = W_U W_\text{down}$ (per Nanda; I go on to illustrate actually that only $W_U$, and not $W_\text{down}$, has to have a circular structures) contain circles and visualizing them
+- &#x2B50; Investigating and illustrating what the attention block (both on a per-head basis and on an aggregate basis) is doing to the original circles in $W_E$
 - &#x2B50; Investigating what the MLP block is doing to these circles
 - &#x2B50; Illustrating the rotation of the circles and explaining how that is achieved
 - &#x2B50; Demonstrate alignment between rows of $W_U$ (the unembedding matrix; refer to architecture diagram below) and appropriate embeddings in the circle to show how read-out of correct answer is done.
@@ -64,7 +70,65 @@ Things to note:
 - There are no positional embeddings
 - MLP activation function shall be $\text{ReLU}$
 
-Both of the above intuitively don't play a crucial role in this narrow task, and were confirmed to be irrelevant in the paper.
+Both the layer norm and positional embeddings intuitively don't play a crucial role in this narrow task, and were confirmed to be irrelevant in the paper.
+
+# 3.1. Equations
+
+Because this blogpost is long and refers to the many parts of the model, I will write out all the equations here. The inputs are simply token indices (e.g. the inputs for the example "$(0 + 14) \mod P = ?$" are `(0, 14, 113)`. All equations here are for 1 particular token (token position $t$). These are all just rather standard transformer components and I would just focus on the terminology of the subspaces (e.g. $z$ refers to head-wise attention output spaces, $o$ refers to aggregate attention output space, 'MLP activation' refers to post-$\text{ReLU}$ vectors, and so on).
+
+## Embedding Block
+
+```python
+x_t = W_E[:, token_index_for_token_t]
+```
+
+## Attention Block
+
+$$
+\begin{align*}
+k_\text{t, head i} & = W_{K \text{, head i }} x_t \\
+q_\text{t, head i} & = W_{Q \text{, head i }} x_t \\
+v_\text{t, head i} & = W_{V \text{, head i }} x_t \\
+\\
+\text{attn vector}_\text{t, head i} &= \frac{1}{\sqrt{d_\text{model}}} \begin{bmatrix}
+q_\text{t, head i} \cdot k_\text{0, head i} \\
+\vdots \\
+q_\text{t, head i} \cdot k_\text{t, head i}
+\end{bmatrix} \\
+\text{attn scores / activations /}a_\text{t, head i} &= \text{softmax}(\text{attn vector}) \\
+\\
+z_\text{t, head i} & = a_\text{t, head i} \cdot \begin{bmatrix}
+v_\text{0, head i} \\
+\vdots \\
+v_\text{t, head i}
+\end{bmatrix} \\
+\\
+o_\text{t} & = W_O \begin{bmatrix}
+v_\text{t, head 0} \\
+\vdots \\
+v_\text{t, head 3} \\
+\end{bmatrix}
+\end{align*}
+$$
+
+## MLP Block
+
+$$
+\begin{align*}
+\text{MLP input}_t & = o_\text{t} + x_t \\
+\text{MLP pre-ReLU vector}_t & = W_\text{up } \text{MLP input}_t + b_\text{up} \\
+\text{MLP activation}_t & = \text{ReLU}(\text{MLP pre-ReLU vector}_t) \\
+\text{MLP out}_t & = W_\text{down} \text{MLP activation}_t
+\end{align*}
+$$
+
+## Unembedding Block
+
+$$
+\begin{align*}
+\text{logits}_t = W_U (\text{MLP out}_t + \text{MLP input}_t)
+\end{align*}
+$$
 
 # 4. Achieving 0 Test Loss
 
@@ -139,18 +203,22 @@ The expected characteristic is definitely present: **some frequencies have very 
 *Their W_E Fourier Coefficient Norms*
 
 In particular, these are the differences I note:
-1. The original paper's "inactive" `W_E` coefficient norms are very small
-2. The original paper's "active" `W_E` frequencies are very clean, whereas I only managed to produce 4 clean pairs in this run, with a few other frequencies being somewhat in-between in norm.
+1. The original paper's "inactive" `W_E` coefficient norms are very small (basically 0)
+2. The original paper's "active" `W_E` frequencies are very clear and clean, whereas I only managed to produce 4 clean pairs in this run, with a few other frequencies being somewhat in-between in norm.
 3. The frequencies that are "active" are different from the set of 5 that they cited in the paper.
 
-My hunch for the first two points is that the **weight decay works over the training process to slowly pare away frequencies that the model can afford to do without**, and that I simply haven't allowed the model enough weight decay time to do that. This is somewhat supported by another run I did for only 5,000 epochs:
+# 5.1. More Weight Decay Time = Cleaner, Fewer Circles
+
+My hunch for the first two points above is that the **weight decay works over the training process to slowly pare away frequencies that the model can afford to do without**, and that I simply haven't allowed the model enough weight decay time to do that. To support this claim, I did another training run with fewer (5,000) and more (20,000) epochs, below. As for point (3), that is not of any concern as the model doesn't have to learn any *specific set of frequencies*, so long as those frequencies are useful (what is "useful" will be explained all the way at the end, and it will make a lot of sense).
+
+## 5,000 Epochs
 
 <img src = "../../images/llm_arithmetic/W_E_fourier_coeffs_5k.png" alt="My W_E Fourier Coefficient Norms (5k epochs)" width="100%"> 
 *My W_E Fourier Coefficient Norms (5,000 epochs)*
 
-We can see here that with fewer epochs, I have even more "active" frequencies, that the model has ostensibly not "cleaned up." As for point (3), that is not of any concern as the model doesn't *have* to learn any specific set of frequencies, so long as those frequencies are useful (what is "useful" will be explained all the way at the end, and it will make a lot of sense).
+Notice I have even more "active" frequencies, that the model has ostensibly not "cleaned up."
 
-Just for good measure, let's try 20,000 epochs:
+## 20,000 epochs:
 
 <img src = "../../images/llm_arithmetic/achieving_0_loss_20k.png" alt="Training Metrics (20k)" width="100%"> 
 *Training Metrics (20,000 epochs)*
@@ -158,15 +226,17 @@ Just for good measure, let's try 20,000 epochs:
 <img src = "../../images/llm_arithmetic/W_E_fourier_coeffs_20k.png" alt="My W_E Fourier Coefficient Norms (20k epochs)" width="100%"> 
 *My W_E Fourier Coefficient Norms (20,000 epochs)*
 
-You can see that there are fewer but cleaner frequency norm spikes now. One of my initial questions when reading the original paper was - why 5 circles? **It seems intuitive that you only need 1 circle - why did the model settle on 5?** I guess we now know that **multiple local periodic structures form simultaneously, and the model eventually prefers the higher-signal periodic structures and pares away the redundant / lower signal structures**; 5 was just an arbitrary number that the original authors happened to arrive at. As it turns out, the minimum number of circles is also 2 and not 1, for reasons that will become clear at the end.
+You can see that there are **fewer but cleaner frequency norm spikes** now. 
 
-# 5.1. Looking at the Circular Embeddings (`W_E` Columns)
+One of my initial questions when reading the original paper was - why 5 circles? **It seems intuitive that you only need 1 circle - why did the model settle on 5?** I guess we now know that **multiple local periodic structures form simultaneously, and the model eventually prefers the higher-signal periodic structures and pares away the redundant / lower signal structures**; 5 was just an arbitrary number that the original authors happened to arrive at. As it turns out, the minimum number of circles is also 2 and not 1, for reasons that will become clear at the end.
+
+# 5.2. Looking at the Circular Embeddings (`W_E` Columns)
 
 Now that we have a grokked model to work with (I'm just going to use the 20,000 epochs one), we can attempt to see if we can actually visualize these embeddings.
 
 Given that:
 - We know there's some periodic structure along the `d_vocab` dimension of `W_E`
-- We know what the Fourier Coefficients for each frequency multiple (`k`) are
+- We know what the Fourier Coefficients for each frequency (`k`) are
 
 Let's try to visualize the embeddings in 2 chosen dimensions to see if the embeddings are indeed spherical. How may we choose the 2 dimensions? Well, if we computed our Fourier Coefficients Norms as such:
 
@@ -198,7 +268,7 @@ Beautiful. And just so we clarify that this only happens for key frequencies, le
 
 Notice that they are random and low-magnitude.
 
-# 5.2. Same Thing (`W_L` Rows)
+# 5.3. Same Thing (`W_L` Rows)
 
 The paper mentions that they found the same key frequencies in $W_L$, where:
 
@@ -225,7 +295,7 @@ The next step in figuring out how the model makes use of these circles is to fig
 <img src = "../../images/llm_arithmetic/rubbish_attn_maps.png" alt="Rubbish attention maps" width="500px"> 
 *Attention Maps for 6 randomly sampled pairs*
 
-Let's focus on the last row of each map since it tells you where the attention head is focusing on while processing the last token (`=`). It looks like rubbish. In particular, I was hoping that we'd see that some attention head has learnt to pay equal attention to the first two tokens, and that all other attention heads become useless, but we don't super see evidence of this.
+**Let's focus on the last row of each map** since it tells you where the attention head is focusing on while processing the last token (`=`). It looks like rubbish. In particular, I was hoping that we'd see that some attention head has learnt to pay equal attention to the first two tokens, and that all other attention heads become useless, but we don't super see evidence of this.
 
 So where do we go from here? Well, we know that:
 - Attention is just something like the relative magnitude of all the $q \cdot k_i$, for some query vector $q$, where $i$ denotes token index.
@@ -262,6 +332,8 @@ So we've observed that circular / periodic embeddings also mean:
 - Periodic $k$, $q$, and $v$ vectors (since each of these are created via linear projections of the embeddings)
 - Periodic attention patterns.
 
+**So far, we've merely replicated and confirmed** what the Nanda paper tells us: there are circles in $W_E$, $W_L$, and the attention maps. **It's time to go beyond and see what periodic attention on periodic embeddings means for the attention outputs.**
+
 Remember that the attention values ($a_i$, where $i$ denotes token index) all sum to 1, which means that the attention output for token $i$ (call $z_i$), i.e.:
 
 $$
@@ -274,7 +346,7 @@ is a **convex combination** with periodic convex coefficients. In this setting w
 
 $$
 \begin{align*}
-z_= = \alpha W_Vx_a + (1 - \alpha) W_V x_b
+z_= = \alpha W_V \text{ } x_a + (1 - \alpha) W_V \text{ } x_b
 \end{align*}
 $$
 
@@ -284,7 +356,7 @@ For the next step, I wish to see what a **periodic convex combination of periodi
 
 > I.E. if a bunch of embeddings formed a circle in the embedding space, applying $W_V$ to them may stretch / squeeze them, but won't *warp* them into a non-circle-looking shape like a bean, a knot, a square, or whatnot.
 
-Because a simple linear transformation won't fundamentally change the shape of the embeddings, and it is the shape that we're interested in, I'll just pretend $W_V$ is the identity matrix. Then, I can just plot $z$ of the `=` token, given by:
+Because a simple linear transformation won't fundamentally change the shape of the embeddings, and it is the shape that we're interested in, without loss of generality, **I'll just pretend $W_V$ is the identity matrix**. Then, I can just plot $z$ of the `=` token, given by:
 
 $$
 \begin{align*}
@@ -292,7 +364,7 @@ z_= = \alpha x_a + (1 - \alpha) x_b
 \end{align*}
 $$
 
-for some periodic $\alpha$. Since Head 1 looks rather much like a simple sinusoidal curve, we'll just take $\alpha \sim \cos(2 \pi f)$ for some frequency $f$. For our plots, we will also fix `a` (hence $x_a$), and vary `b` with the same frequency. The actual value for Head 1's frequency is $4$, but for the sake of illustration, we'll make it $0.5$.
+for some periodic $\alpha$. Since Head 1 looks rather much like a simple sinusoidal curve, we'll just take $\alpha \sim \cos(2 \pi (f + \text{offset}))$ for some frequency $f$. **For our plots, we will also fix `a` (hence $x_a$), and vary `b` with the same frequency.** The actual value for Head 1's frequency is $4$, but for the sake of illustration, we'll make it $0.5$.
 
 <div style="display: flex; justify-content: center;">
     <video width="100%" autoplay loop muted playsinline>
@@ -310,7 +382,7 @@ In fact, depending on how many wavelengths the attention coefficient $\alpha$ is
 </div>
 <br/>
 
-**When the circle (embedding) frequency differs from the attention frequency, we also get different families of curves.** Below, I illustrate what the attention output ($z$ or $v$; since $z$ vectors are just weighted sums of $v$ vectors, $z$-space and $v$-space are equivalent) space looks like when we focus on the dimensions in which the periodicity is different from what the attention heads are attuned to.
+**When the circle (embedding) frequency differs from the attention frequency, we also get different families of curves.** For example, if we look at the Fourier-Inferred 2D Subspace (32 Hz) in the attention outputs of Head 1 (which is attuned to the 4 Hz Embedding Circle, hence produces attention scores of 4 Hz), we get different patterns from the above. Below, **I illustrate what the attention output** ($z$ or $v$; since $z$ vectors are just weighted sums of $v$ vectors, $z$-space and $v$-space are equivalent) **should theoretically look like** when we visualize the **Fourier-Inferred 2D Subspaces (k Hz) of the attention output** when the **attention head's frequency ($\alpha$) is different from $k$**.
 
 <div style="display: flex; justify-content: center;">
     <video width="100%" autoplay loop muted playsinline>
@@ -325,7 +397,7 @@ You will see the characteristic **petal shapes** in all combinations of embeddin
 
 # 6.2. Petals in Attention Outputs (z; before `W_O`)?
 
-**The above curves are theoretical predictions** for what the outputs $z$ look like when the attention values are periodic with some frequency (`alpha`) and the embeddings are periodic with some other frequency (`embedding freq`), when we fix token `a` and vary token `b`. **Let's see if we can actually find these petal shapes in the actual $z$ values for `a = 70` (arbitrarily chosen) and `b in range(113)`.**
+**The above curves are theoretical predictions** for what the outputs $z$ (for token `=`) look like when the attention values are periodic with some frequency (`alpha`) and the embeddings are periodic with some other frequency (`embedding freq`), when we fix token `a` and vary token `b`. **Let's see if we can actually find these petal shapes in the actual $z$ values for `a = 70` (arbitrarily chosen) and `b in range(113)`.**
 
 ## Example: Head 1 on 4 Hz Circle Subspace
 
@@ -335,7 +407,7 @@ In visualizing the attention outputs $z$ (not $o$, i.e. just before applying $W_
 
 We'll start with the simplest option of looking at Head 1 (because its attention values are simply periodic in only 4 Hz), and visualize the 2D subspace corresponding to the 4 Hz circle in the embedding space. Now, what does this mean?
 
-Remember that **to visualize the 4 Hz circle in the embedding space, we had to use the fourier coefficients to figure out 2 directions to use as our 2D axes**:
+Remember that **to visualize the 4 Hz circle in the embedding space**, we had to **use the fourier coefficients to infer a 2D basis**:
 
 ```python
 k = 4
@@ -347,7 +419,7 @@ basis_vecs /= basis_vecs_norm                                       # shape (d_m
 circle_coords_to_visualize = W_E.T @ basis_vecs                     # shape (P, 2)
 ```
 
-Because the embeddings are transformed via $W_V$ in the attention block, we want to follow these 2 directions through the transformation via $W_V$. The means answering the question: what 2 directions in the $v$ vectors (or $z$ vectors) am I now interested in visualizing (that correspond to `basis_vecs` before the application of $W_V$)? Some linear algebra to figure this out:
+Because the embeddings are transformed via $W_V$ in the attention block, we want to **follow these 2 directions through the transformation via $W_V$**. The means answering the question: what 2 directions in the $v$ vectors (or $z$ vectors) am I now interested in visualizing (that correspond to `basis_vecs` prior to applying $W_V$)? Some linear algebra to figure this out:
 
 ```python
 # This is the computation of v vectors in attn head i
@@ -420,7 +492,7 @@ However, visualizing head by head does **not** give the full picture of what's e
 <img src = "../../images/llm_arithmetic/wo_action.png" alt="v vectors weighted sum of W_O columns" width="100%"> 
 *v vectors get stacked, then get transformed by W_O*
 
-The application of $W_O$ to the stacked $v$ vectors is equivalent to taking a weighted sum of the columns of $W_O$, where the coefficients are given by the values of the stacked $v$ vectors, so you can see that all the contributions of each attention head are summed together. **The consequence of this is that it could well be possible for the contributions from head 2 (e.g.) to disrupt the petal structure contributed by head 1 (e.g.).**
+The application of $W_O$ to the stacked $v$ vectors is equivalent to taking a weighted sum of the columns of $W_O$, where the coefficients are given by the values of the stacked $v$ vectors, so you can see that **all the contributions of each attention head are summed together. The consequence of this is that it could well be possible for the contributions from head 2 (e.g.) to disrupt the petal structure contributed by head 1 (e.g.).**
 
 # 7.1. Empirical Evidence
 Let's see how the different heads combine to give a final pattern.
@@ -430,7 +502,7 @@ Let's see how the different heads combine to give a final pattern.
 <img src = "../../images/llm_arithmetic/aggregation_of_petals_4hz.png" alt="Aggregation of Petals in 4 Hz" width="100%"> 
 *`o`-vectors corresponding to Fourier-Inferred 2D Subspace (4 Hz Embedding Circle), head-wise and summed*
 
-This is quite amazing. The petal structures seems to have disappeared in the aggregate $o$ vectors (red plot), to give a circle! The circle looks very wiggly, and I suspected that it could either be not a circle in actuality, or that it could merely be an artifact of the interpolation being too expressive / overfitting the points, just like in the attn head 1 plot. To be sure, I did a Fourier Decomposition and plotted the norms of the coefficients for each coefficient again for the red points:
+This is quite amazing. **The petal structures seems to have disappeared in the aggregate $o$ vectors (red plot), to give a circle!** The circle looks very wiggly, and I suspected that it could either be not a circle in actuality, or that it could merely be an artifact of the interpolation being too expressive / overfitting the points, just like in the attn head 1 plot. To be sure, I did a Fourier Decomposition and plotted the norms of the coefficients for each coefficient again for the red points:
 
 <img src = "../../images/llm_arithmetic/aggregation_of_petals_4hz_fourier.png" alt="Aggregation of Petals in 4 Hz" width="100%"> 
 *Fourier Coefficient Norms for Projected `o` vectors*
@@ -441,7 +513,9 @@ The same thing happens for the 2D subspaces corresponding to the other embedding
 
 # 7.2. Petals Shift Over Increasing `a` to Give Moving Circle
 
-For this next section, I don't want to just focus on any one given value of `a`. I want to traverse a sample sequence of `a` values and animate how these petal shapes change as `a` increases, and how they still sum to a circle, and how the circle moves around.
+For this next section, I don't want to just focus on any one given value of `a`. I want to **traverse a sample sequence of `a` values** (each `a` value still has all `b` values from `[0, 113)`; that's how we have 113 points to make up each pattern) and **animate how these petal shapes change** as `a` increases, and how they **still sum to a circle**, and **how the circle moves around.** The punchline for this section is that the petal shapes **always** recombine to form a circle, and not that the circle is panning around. 
+
+**Note:** turns out, the panning around of circles is a misleading way to understand how the circles vary as `a` increases. For each of these circles, there exists another 2D subspace where the petals combine differently to still give a circle, but a circle that **rotates**, and this rotating circle is the key to modulo arithmetic computation. Because the discovery of this hidden 2D subspace is somewhat involved, I'll explain this more in Section 9.
 
 ## 4 Hz Circle
 
@@ -480,6 +554,7 @@ Now that we know that these 4 Hz, 32 Hz, and 43 Hz circles exist in the $o$ vect
 *`o` vectors in Fourier-Inferred 2D Basis (k Hz circle) for k in {4, 32, 43} (alternatively calculated)*
 
 I make no comment on why the 43 Hz Circle looks so stretched.
+> I may have missed a normalization factor somewhere. &#x1F642;
 
 # 7.2. Why?
 
@@ -493,7 +568,7 @@ To state what we've observed so far in simple terms:
 
 **It would be nice if we could argue that:**
 - The **main goal is to generate simple circles** in the $o$ space because they may be **particularly amenable to downstream readout functions** (MLP layer).
-- Embeddings that approximate periodic functions like sines and cosines are especially amenable to composition (constructive interference) to give that desired simple circle. This is essentially the Fourier Decomposition argument again - something like: just like how sines and cosines of different magnitudes and frequencies can combine to give any arbitrary function, **multiple instances of the above petal structures (generated the way we generated them) of various orientations and frequency combinations can combine to give any arbitrary function**, and particularly, a simple circle.
+- Embeddings that approximate periodic functions like sines and cosines are especially amenable to composition (constructive interference) to give that desired simple circle, at least if we were only interested in discrete points along the circle. This is essentially the Fourier Decomposition argument again - something like: just like how sines and cosines of different magnitudes and frequencies can combine to give any arbitrary function, **multiple instances of the above petal structures (generated the way we generated them) of various orientations and frequency combinations can combine to give any arbitrary function**, and particularly, a simple circle.
 
 The above would be a neat argument for why periodic embeddings are learnt, and why there are circles of MULTIPLE frequencies, not just one.
 
@@ -517,6 +592,8 @@ My initial guess was that I should be able to find a set (or even 3) of 113 vect
 - This model actually doesn't have superposition (!!!)
 
 ## This Model Doesn't Have Superposition
+
+> **The TLDR here is that the MLP block's $\text{ReLU}$ non-linearity turns out to be non-critical.** It could have been spurriously helpful, but a model variant with a $\text{ReLU}$-less MLP turned out to grok modulo arithmetic just fine. This section goes through the discovery of this fact and argumentation of why it makes sense, but **feel free to skip**.
 
 In ["Superposition - An Actual Image of Latent Spaces"](/posts/viewing-latent-spaces/), I illustrate how `W_up`, `b_up`, and $\text{ReLU}$ can cleverly segment a subspace into 2 regimes (per MLP dimension) in order to silence all other features except the one we care about:
 
@@ -666,6 +743,29 @@ To be sure, let's look at the circles that `W_U` gets to see (i.e. the `MLP_outp
     </video>
 </div>
 <br/>
+
+## 9.7. What Created The Rotational Component?
+
+We saw that the rotation circles were present in the MLP activation vectors, and also the $o$ vectors. This means that the attention block, which generates the $o$ vectors, created the rotating circles. However, previously in [Section 7.2](#72-petals-shift-over-increasing-a-to-give-moving-circle), we visualized a 2D subspace that showed us a revolving (and not rotating) circle. What's left is just to see how the rotating circles got created by the attention block.
+
+Well, we know that the **rotating circles lived in a somewhat unexpected 2D subspace of the MLP activation vectors** (the 3rd and 4th PCs of all the Fourier-Inferred 2D Subspaces combined). **Then, we traced the 3rd and 4th PCs in the MLP activation space back to the $o$ space**, visualized those dimensions, and saw the rotating circles. We can **further trace this hidden subspace back to each head's $z$ space** and visualize those and see how they combine to give the overall rotating circles in the $o$ space.
+<br/>
+<br/>
+
+<div style="display: flex; justify-content: center;">
+    <video width="100%" autoplay loop muted playsinline>
+        <source src="../../images/llm_arithmetic/rotational_attn_outputs.mov" type="video/mp4">
+    </video>
+</div>
+<br/>
+
+Let's interpret this:
+- You can still see the characteristic petal shapes per head. This is expected we're merely adopting another point of view, compared to [Section 7.2](#72-petals-shift-over-increasing-a-to-give-moving-circle)
+- The orientation of the petals are no longer the same across heads. To observe this, let's focus on the 4 Hz circle. We see that in attention heads 0, 2, and 3, the start of the petal structure (red points meeting the blue points) are facing the right, whereas in attention head 1, the start of the petal structure is facing up. This is in contrast to [Section 7.2](#72-petals-shift-over-increasing-a-to-give-moving-circle), where the petal structures in all heads had the same orientation.
+
+I'll reiterate that the first 4 columns literally sum (**simple sum**) to give the last column. Without getting too into the weeds, it is obvious **that the combination of different orientations and scales of these petal structures** allow for these various petal structures **to sum into a rotating circle**.
+
+So there we have it. The meat of the entire computation (i.e. formation of circles that can rotate), other than the embedding and read-out function, was basically done in the attention block.
 
 # 10. Read-Out Transformation: `W_U`
 
