@@ -1,6 +1,6 @@
 ---
 published: true
-title: Complexity Series (2/3) - Carry-Over Circuits
+title: Complexity Series (2 / 3) - Carry-Over Circuits
 date: 2026-02-06 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]
