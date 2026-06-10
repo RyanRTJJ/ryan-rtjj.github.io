@@ -76,16 +76,16 @@ d \mu^\infty = \chi \cdot dh
 \end{align*}
 $$
 
-where $d$ refers to the total differential (i.e. first order approximation of $\delta$), and so **$\chi$ is the Jacobian of $\mu^\infty$ w.r.t $h$.** This is precisely the matrix of susceptibilities:
+where $d$ refers to the total differential (i.e. first order approximation of $\partial$), and so **$\chi$ is the Jacobian of $\mu^\infty$ w.r.t $h$.** This is precisely the matrix of susceptibilities:
 
 $$
 \begin{align*}
 \text{ } \\
 \chi = 
-\begin{bmatrix} \frac{\delta \mu_1}{\delta h_1} & \frac{\delta \mu_1}{\delta h_2} & \cdots & \frac{\delta \mu_1}{\delta h_k} \\
-\frac{\delta \mu_2}{\delta h_1} & \frac{\delta \mu_2}{\delta h_2} & \cdots & \frac{\delta \mu_2}{\delta h_k} \\
+\begin{bmatrix} \frac{\partial \mu_1}{\partial h_1} & \frac{\partial \mu_1}{\partial h_2} & \cdots & \frac{\partial \mu_1}{\partial h_k} \\
+\frac{\partial \mu_2}{\partial h_1} & \frac{\partial \mu_2}{\partial h_2} & \cdots & \frac{\partial \mu_2}{\partial h_k} \\
 \vdots & \vdots & \ddots & \vdots \\
-\frac{\delta \mu_i}{\delta h_1} & \frac{\delta \mu_i}{\delta h_2} & \cdots & \frac{\delta \mu_i}{\delta h_k}
+\frac{\partial \mu_i}{\partial h_1} & \frac{\partial \mu_i}{\partial h_2} & \cdots & \frac{\partial \mu_i}{\partial h_k}
 \end{bmatrix}
 \end{align*}
 $$
@@ -148,7 +148,7 @@ And define the empirical loss:
 
 $$
 \begin{align*}
-L_n (w) = - \frac{1}{n} \sum_{I=1}^n \log p(y_i \mid x_i, w)$
+L_n (w) = - \frac{1}{n} \sum_{I=1}^n \log p(y_i \mid x_i, w)
 \end{align*}
 $$
 
@@ -202,7 +202,7 @@ Z_n(\mathcal{U}) = \int_{\mathcal{U}} \exp \left( -n L_n(w)\right) \varphi (w) d
 \end{align*}
 $$
 
-### Derivation
+### Derivation of Posterior
 
 Why is this correct? Starting from Bayes' theorem, we have:
 
@@ -297,3 +297,175 @@ where these are the hyperparameters:
 - $\beta$ is the inverse temperature
 - $\gamma$ is the localization strength
 
+### Derivation of Localized Tempered Posterior
+
+Starting with the definition of posterior (similar to our derivation in [Derivation of Posterior](#derivation-of-posterior)):
+
+$$
+\begin{align*}
+p(w \mid D_n) & \propto p(D_n \mid w) \varphi (w) \\
+& \propto \prod_{i=1}^n p(y_i \mid x_i, w) \varphi(w)
+\end{align*}
+$$
+
+Then, an inverse temperature ($\beta < 1$) modification is applied to the likelihood term to flatten the likelihood distribution:
+
+$$
+\begin{align*}
+p(w \mid D_n) & \prod_{i=1}^n p(y_i \mid x_i, w)^\beta \varphi(w) \\
+& \propto \exp \left( \sum_{i=1}^n \beta \log p(y_i \mid x_i, w) \right) \varphi(w) \\
+& \propto \exp \left( -n \beta L_n(w) \right) \varphi(w)
+\end{align*}
+$$
+
+A localization modification is applied to the prior term to assume that $\varphi(w)$ is Gaussian centered at $w^\star$:
+
+$$
+\begin{align*}
+p(w \mid D_n) & \propto \exp \left( -n \beta L_n(w) \right) \cdot c_G \cdot \exp \left( - \frac{(w - w^\star)^2}{2 \sigma^2} \right) \\
+& \propto \exp \left( -n \beta L_n(w) - \frac{(w - w^\star)^2}{2 \sigma^2} \right)
+\end{align*}
+$$
+
+where $c_G$ is the normalization factor for the Gaussian PDF. Then, the localization strength parameter is applied to replace $\sigma$:
+
+$$
+\begin{align*}
+p(w \mid D_n) & \propto \exp \left( -n \beta L_n(w) - \frac{(w - w^\star)^2}{2 (1 / \sqrt{\gamma})^2} \right) \\
+& \propto \exp \left( -n \beta L_n(w) - \frac{\gamma}{2} \| w - w^\star \|^2 \right)
+\end{align*}
+$$
+
+As is the standard result, the minimization of the L2 loss term can be interpreted as:
+1. Wanting to achieve a tighter fit and minimization of Gaussian noise; hence $\uparrow \lambda \Rightarrow$ smaller std. deviation in the Gaussian prior term.
+2. Higher weight on the L2 loss penalty (hence also encouraging tighter fit)
+
+### Widely Applicable Bayesian Information Criterion (WBIC)
+
+Introduced in the aforementioned ([WBIC paper (Watanabe, 2013)](https://arxiv.org/pdf/1208.6338)) is the eponymous WBIC, which expands into a function of $\lambda$:
+
+$$
+\begin{align*}
+\text{WBIC} & = \mathbb{E}_w^\beta \left[ n L_n (w) \right], \space \beta = \frac{1}{\log n}
+\end{align*}
+$$
+
+Watanabe's main theorem shows that:
+
+$$
+\begin{align*}
+\text{WBIC} & \simeq n L_n (w^\star) + \lambda \log n
+\end{align*}
+$$
+
+Now rearrange this for $\lambda$:
+
+$$
+\begin{align*}
+\lambda & \approx \frac{\text{WBIC} - n L_n(w_0)}{\log n} \\
+& = \frac{\mathbb{E}_w^\beta \left[ n L_n (w) \right] -n L_n(w^\star)}{\log n} \\
+& = n \beta \left[ \mathbb{E}_w^\beta \left[ L_n (w) \right] - L_n(w^\star) \right]
+\end{align*}
+$$
+
+Which is exactly the LLC estimator. The only difference is we use $\mathbb{E}_{w \mid w^\star, \gamma}^\beta$ to denote that the expectation is using the localized tempered posterior.
+
+## Estimating Susceptibility
+
+Remember that the susceptibility is roughly the first derivative of an observable w.r.t some dataset hyperparameter (probe). The observable in this case can be something as general as posterior probability of the parameters or the loss of the model with those parameters.
+
+Shifting their discussion concretely to the LLM, they define
+- **Sequence models** $p(y \mid x, w)$ that predict
+- **Tokens** $y \in \Sigma$ given some
+- **Context** $x \in \Sigma^k$ of length $1 < k \leq K$ where $K$ is the max context length, that are specifically
+- a Transformer with a **vector of weights** $w \in W$.
+
+They also define a product decomposition $W = U \times C$ (think of this as segmenting the vector $w$ into 2 disjoint sets), which is useful for thinking of the weights as a sum of component-wise weights.
+
+Define further:
+- **Dataset** $D_n = \{ (x_i, y_i) \}_{i=1}^n$ drawn i.i.d. from
+- **True distribution** $q(x, y)$
+- The standard losses:
+  - Sample **negative-log-likelihood (NLL)** $\ell_{xy} (w) = - \log p(y \mid x, w)$
+  - Mean **NLL (a.k.a. Cross Entropy Loss)** $L_n(w) = \frac{1}{n} \sum_{i=1}^n \ell_{xy}(w)$.
+
+We can define an observable that attempts to measure the "slack" a current $w$ has, i.e. if you were to freeze all the weights except for a component in question $C$, how would the posterior or loss change when you vary $c$ around its current location? To do this, they define this quantity:
+
+$$
+\begin{align*}
+\phi_C (w) = \delta (u - u^\star)\left[ L(w) - L(w^\star) \right]
+\end{align*}
+$$
+
+Where $\delta$ is the Dirac delta (think of it as an indicator variable that switches on only when $u$ is at its current trained location $u^\star$). So, $\phi_C(w)$ measures the difference in loss when you vary $c$ in $w = (u^\star, c)$. In reality, this quantity can be any similarly useful quantity, so they call this a **"generalized function"**.
+
+To capture "slack", one can use the **expectation** $\langle \phi_C(w) \rangle_\beta$.
+
+### Deriving the Expectation
+
+The **annealed posterior** (seems to me to be the same posterior as in [Derivation Of Posterior](#derivation-of-posterior)) is:
+
+$$
+\begin{align*}
+p_n^\beta (w) & = \frac{\exp \left\{ -n \beta L (w) \right\} \varphi(w)}{Z_n^\beta} \\
+\text{where } Z_n^\beta & = \int \exp \left\{ -n \beta L(w) \right\} \varphi(w) dw
+\end{align*}
+$$
+
+The only difference is that they did not expand $\varphi(w)$, which I assume is Gaussian at local minima. So then the expectation is:
+
+$$
+\begin{align*}
+\langle \phi \rangle_\beta = \int \phi(w) p_n^\beta (w) dw
+\end{align*}
+$$
+
+## Susceptibility of Posterior Expectation
+
+The susceptibility of posterior expectation to a perturbation of data parameter $h$ is intuitively just the derivative:
+
+$$
+\begin{align*}
+\chi = \frac{1}{n \beta} \frac{\partial}{\partial h} \langle \phi \rangle_{\beta, h}\bigg|_{h=0}
+\end{align*}
+$$
+
+There's an additional $\frac{1}{n \beta}$ multiplicative factor here because it becomes convenient with later steps.
+
+## Per-Token Susceptibility
+
+Define the **per-token susceptibility of component $C$ for $(x, y)$** as:
+
+$$
+\begin{align*}
+\chi_{xy}^C = - \text{Cov}_\beta \left[ \phi_C, \ell_{xy} (w) - L(w)\right]
+\end{align*}
+$$
+
+### Deriving the Susceptibility
+
+The derivation of the above expression is just straightforward differentiation of $\phi$, but just for my future reference:
+
+$$
+\begin{align*}
+\langle \phi \rangle_{\beta, h} & = \frac{\int \phi(w) \exp \left\{ -n \beta L_h(w) \right\} \varphi (w) dw}{\int \exp \left\{ -n \beta L_h(w) \right\} \varphi(w) dw}
+\end{align*}
+$$
+
+Derivative of numerator:
+
+$$
+\begin{align*}
+\frac{\partial \text{ numerator}}{\partial h} = -n \beta \int \phi (w) \left( \frac{\partial L_h (w)}{\partial h} \right) \exp \left\{ -n \beta L(w) \right\} \varphi(w) dw
+\end{align*}
+$$
+
+Derivative of denominator:
+
+$$
+\begin{align*}
+\frac{\partial \text{ denominator}}{\partial h} = -n \beta \int \left( \frac{\partial L_h (w)}{\partial h} \right) \exp \left\{ -n \beta L(w) \right\} \varphi(w) dw
+\end{align*}
+$$
+
+Apply quotient rule, 
