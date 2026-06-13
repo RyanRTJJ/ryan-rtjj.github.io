@@ -1,0 +1,126 @@
+{%- comment -%}
+  Reusable tic-tac-toe widget. Dependency-free, scoped CSS, multi-instance safe.
+  Usage:  {% include widgets/tic-tac-toe.html %}
+{%- endcomment -%}
+
+<style>
+  .ttt-wrap { display: flex; flex-direction: column; align-items: center; margin: 1.5rem 0; }
+  .ttt-status { font-weight: 600; margin-bottom: 0.75rem; min-height: 1.5em; }
+  .ttt-board {
+    display: grid;
+    grid-template-columns: repeat(3, 84px);
+    grid-template-rows: repeat(3, 84px);
+    gap: 6px;
+  }
+  .ttt-cell {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.6rem; font-weight: 700; line-height: 1;
+    border: none; border-radius: 10px; cursor: pointer;
+    background: var(--card-bg, #f2f3f5);
+    color: var(--text-color, #1f2328);
+    transition: transform 0.06s ease, background 0.15s ease;
+    user-select: none;
+  }
+  .ttt-cell:hover:not(:disabled) { background: var(--card-hover-bg, #e6e8eb); transform: translateY(-1px); }
+  .ttt-cell:disabled { cursor: default; }
+  .ttt-cell.ttt-x { color: #2f6fed; }
+  .ttt-cell.ttt-o { color: #e0563f; }
+  .ttt-cell.ttt-win { background: rgba(80, 200, 120, 0.25); }
+  .ttt-reset {
+    margin-top: 1rem; padding: 0.45rem 1.1rem; font-size: 0.9rem; font-weight: 600;
+    border: 1px solid var(--main-border-color, #d0d3d6); border-radius: 8px;
+    background: transparent; color: inherit; cursor: pointer;
+  }
+  .ttt-reset:hover { background: var(--card-hover-bg, #e6e8eb); }
+</style>
+
+<div class="ttt-wrap" markdown="0">
+  <div class="ttt-status"></div>
+  <div class="ttt-board"></div>
+  <button class="ttt-reset" type="button">Reset</button>
+</div>
+
+{% raw %}
+<script>
+(function () {
+  // Find the most recently rendered, not-yet-initialized widget instance.
+  const wraps = document.querySelectorAll('.ttt-wrap');
+  const root = wraps[wraps.length - 1];
+  if (!root || root.dataset.tttInit) return;
+  root.dataset.tttInit = '1';
+
+  const statusEl = root.querySelector('.ttt-status');
+  const boardEl = root.querySelector('.ttt-board');
+  const resetEl = root.querySelector('.ttt-reset');
+
+  const LINES = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+    [0, 3, 6], [1, 4, 7], [2, 5, 8], // cols
+    [0, 4, 8], [2, 4, 6]             // diagonals
+  ];
+
+  let board, current, over;
+  const cells = [];
+
+  function winner() {
+    for (const [a, b, c] of LINES) {
+      if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+        return { player: board[a], line: [a, b, c] };
+      }
+    }
+    return null;
+  }
+
+  function render() {
+    cells.forEach((cell, i) => {
+      cell.textContent = board[i] || '';
+      cell.classList.toggle('ttt-x', board[i] === 'X');
+      cell.classList.toggle('ttt-o', board[i] === 'O');
+      cell.classList.remove('ttt-win');
+      cell.disabled = over || !!board[i];
+    });
+  }
+
+  function move(i) {
+    if (over || board[i]) return;
+    board[i] = current;
+    const w = winner();
+    if (w) {
+      over = true;
+      render();
+      w.line.forEach(idx => cells[idx].classList.add('ttt-win'));
+      statusEl.textContent = w.player + ' wins!';
+      return;
+    }
+    if (board.every(Boolean)) {
+      over = true;
+      render();
+      statusEl.textContent = "It's a draw.";
+      return;
+    }
+    current = current === 'X' ? 'O' : 'X';
+    render();
+    statusEl.textContent = current + "'s turn";
+  }
+
+  function reset() {
+    board = Array(9).fill('');
+    current = 'X';
+    over = false;
+    render();
+    statusEl.textContent = "X's turn";
+  }
+
+  for (let i = 0; i < 9; i++) {
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'ttt-cell';
+    cell.addEventListener('click', () => move(i));
+    boardEl.appendChild(cell);
+    cells.push(cell);
+  }
+  resetEl.addEventListener('click', reset);
+  reset();
+})();
+</script>
+{% endraw %}
