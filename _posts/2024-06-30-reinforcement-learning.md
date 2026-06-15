@@ -169,7 +169,7 @@ This is a statement of fact. Its a higher-level abstraction that does not concer
 
 Because $v(s)$ is an expectation, this implies that you have to sample rollouts so that you have multiple rollouts and returns to take the expectation of.
 
-### Bellman Equation for $v$
+### Bellman Equation for $v$ in MRP
 
 The Bellman Equation is just a recursive formulation of $v$:
 
@@ -185,7 +185,7 @@ $$
 
 $$
 \begin{align*}
-v(s) = R_s + \gamma \mathcal{P}_{[s,:]} \cdot
+v(s) = \mathcal{R}_s + \gamma \mathcal{P}_{[s,:]} \cdot
 \begin{bmatrix}
 v(s_1) \\
 \vdots \\
@@ -193,6 +193,37 @@ v(s_n)
 \end{bmatrix}
 \end{align*}
 $$
+
+Visually, we have:
+
+<figure class="rl-tree" markdown="0">
+  <svg viewBox="0 0 730 220" role="img" aria-label="State s fans out to successor states s_1 through s_n.">
+    <defs>
+      <marker id="rl-arrowhead-mrp" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#b0b0b0"/>
+      </marker>
+    </defs>
+
+    <!-- Edges: state s -> successor states -->
+    <path class="rl-arrow" d="M279,110 C366,110 366,65 452,65" marker-end="url(#rl-arrowhead-mrp)"/>
+    <path class="rl-arrow" d="M279,110 C366,110 366,155 452,155" marker-end="url(#rl-arrowhead-mrp)"/>
+
+    <!-- Edge labels -->
+    <text class="rl-edge" x="330" y="80" text-anchor="middle"><tspan class="rl-var">P</tspan><tspan class="rl-sub" baseline-shift="sub"><tspan class="rl-var">s</tspan>→<tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan></text>
+    <text class="rl-edge" x="330" y="148" text-anchor="middle"><tspan class="rl-var">P</tspan><tspan class="rl-sub" baseline-shift="sub"><tspan class="rl-var">s</tspan>→<tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">n</tspan></tspan></text>
+
+    <!-- Root state node: s (cx=268, cx_succ=463, midpoint=365=730/2) -->
+    <circle class="rl-node" cx="268" cy="110" r="11" style="fill: #d65344; stroke: #d65344;"/>
+    <text class="rl-label" x="268" y="141" text-anchor="middle"><tspan class="rl-var">s</tspan></text>
+
+    <!-- Successor state nodes -->
+    <circle class="rl-node" cx="463" cy="65" r="11"/>
+    <text class="rl-label" x="463" y="41" text-anchor="middle"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></text>
+    <text class="rl-dots" x="463" y="113" text-anchor="middle">⋮</text>
+    <circle class="rl-node" cx="463" cy="155" r="11"/>
+    <text class="rl-label" x="463" y="183" text-anchor="middle"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">n</tspan></text>
+  </svg>
+</figure>
 
 ### Bellman in Matrix Form
 
@@ -229,7 +260,7 @@ v & = (I - \gamma \mathcal{P})^{-1} \mathcal{R}
 \end{align*}
 $$
 
-The only thing is that the inverse has $O(n^3)$ computational complexity, so it's not typically practical for large MDPs. So in practice, there exist a few different ways to solve this that are all variants of Dynamic Programming:
+The only thing is that the inverse has $O(n^3)$ computational complexity, so it's not typically practical for large MRPs. So in practice, there exist a few different ways to solve this that are all variants of Dynamic Programming:
 - Simple Dynamic Programming
 - Monte-Carlo Evaluation
 - Temporal-Difference Learning
@@ -252,16 +283,107 @@ $$
 
 ### Value Function
 
-For a Markov Chain / MRP, we had:
+For an MRP, we had:
 
 $$
 v(s) = \mathbb{E}[G_t \mid S_t = s]
 $$
 
-Having a policy just informs that sample Markov Chains that we have, so we merely have to adjust our expectation to be w.r.t to the policy distribution:
+This does not have any sense of action-taking baked into it. The process just unfolds by itself without any choice of actions. Now, we have a policy that tells us how to take action. $v$ becomes a distribution (because $\pi$ is a distribution over actions), and we can then take the expectation of it.
+
+### Bellman Equation for $v$ in MDP
+
+For an MRP, $v$ has the Bellman Equation:
 
 $$
-v(s) = \mathbb{E}_\pi[G_t \mid S_t = s]
+\begin{align*}
+v & = \mathcal{R} + \gamma \mathcal{P} v
+\end{align*}
+$$
+
+If we were to add in the action-taking steps, we arrive at this decision tree:
+
+<figure class="rl-tree" markdown="0">
+  <svg viewBox="0 0 730 340" role="img" aria-label="Decision tree: state s leads to three action nodes; each action fans out into successor states.">
+    <defs>
+      <marker id="rl-arrowhead-mdp" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#b0b0b0"/>
+      </marker>
+    </defs>
+
+    <!-- Edges: state s -> action nodes -->
+    <path class="rl-arrow" d="M63,215 C148,215 148,110 234,110" marker-end="url(#rl-arrowhead-mdp)"/>
+    <path class="rl-arrow" d="M63,215 C148,215 148,215 234,215" marker-end="url(#rl-arrowhead-mdp)"/>
+    <path class="rl-arrow" d="M63,215 C148,215 148,320 234,320" marker-end="url(#rl-arrowhead-mdp)"/>
+
+    <!-- Edges: action node 1 -> successor states -->
+    <path class="rl-arrow" d="M258,110 C344,110 344,70 429,70" marker-end="url(#rl-arrowhead-mdp)"/>
+    <path class="rl-arrow" d="M258,110 C344,110 344,150 429,150" marker-end="url(#rl-arrowhead-mdp)"/>
+
+    <!-- Edges: action nodes 2 & 3 -> "..." (collapsed successor states) -->
+    <path class="rl-arrow" d="M258,215 C341,215 341,215 424,215" marker-end="url(#rl-arrowhead-mdp)"/>
+    <path class="rl-arrow" d="M258,320 C341,320 341,320 424,320" marker-end="url(#rl-arrowhead-mdp)"/>
+
+    <!-- Edges: successor state s_1 -> next action nodes -->
+    <path class="rl-arrow" d="M453,70 C538,70 538,30 624,30" marker-end="url(#rl-arrowhead-mdp)"/>
+    <path class="rl-arrow" d="M453,70 C538,70 538,70 624,70" marker-end="url(#rl-arrowhead-mdp)"/>
+    <path class="rl-arrow" d="M453,70 C538,70 538,110 624,110" marker-end="url(#rl-arrowhead-mdp)"/>
+
+    <!-- Edges: successor state s_n -> "..." (collapsed next actions) -->
+    <path class="rl-arrow" d="M453,150 C536,150 536,150 619,150" marker-end="url(#rl-arrowhead-mdp)"/>
+
+    <!-- Edge labels: R_s^{a_i} -->
+    <text class="rl-edge" x="140" y="140" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub rl-var" baseline-shift="sub">s</tspan><tspan class="rl-sup" baseline-shift="super" dx="-4"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan></text>
+    <text class="rl-edge" x="150" y="200" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub rl-var" baseline-shift="sub">s</tspan><tspan class="rl-sup" baseline-shift="super" dx="-4"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">2</tspan></tspan></text>
+    <text class="rl-edge" x="160" y="260" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub rl-var" baseline-shift="sub">s</tspan><tspan class="rl-sup" baseline-shift="super" dx="-4"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">3</tspan></tspan></text>
+
+    <!-- Edge labels from s_1 to next action nodes -->
+    <text class="rl-edge" x="590" y="16" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub" baseline-shift="sub"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan><tspan class="rl-sup" baseline-shift="super" dx="-9"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan></text>
+    <text class="rl-edge" x="590" y="54" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub" baseline-shift="sub"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan><tspan class="rl-sup" baseline-shift="super" dx="-9"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">2</tspan></tspan></text>
+    <text class="rl-edge" x="590" y="92" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub" baseline-shift="sub"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan><tspan class="rl-sup" baseline-shift="super" dx="-9"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">3</tspan></tspan></text>
+
+    <!-- Root state node: s -->
+    <circle class="rl-node" cx="50" cy="215" r="11" style="fill: #d65344; stroke: #d65344;"/>
+    <text class="rl-label" x="50" y="246" text-anchor="middle"><tspan class="rl-var">s</tspan></text>
+
+    <!-- Action nodes (all light blue via CSS default) -->
+    <circle class="rl-action" cx="245" cy="110" r="11"/>
+    <text class="rl-label" x="245" y="88" text-anchor="middle"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></text>
+    <circle class="rl-action" cx="245" cy="215" r="11"/>
+    <text class="rl-label" x="245" y="193" text-anchor="middle"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">2</tspan></text>
+    <circle class="rl-action" cx="245" cy="320" r="11"/>
+    <text class="rl-label" x="245" y="298" text-anchor="middle"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">3</tspan></text>
+
+    <!-- Successor state nodes (from action 1) -->
+    <circle class="rl-node" cx="440" cy="70" r="11"/>
+    <text class="rl-label" x="440" y="46" text-anchor="middle"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></text>
+    <text class="rl-dots" x="440" y="114" text-anchor="middle">⋮</text>
+    <circle class="rl-node" cx="440" cy="150" r="11"/>
+    <text class="rl-label" x="440" y="178" text-anchor="middle"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">n</tspan></text>
+
+    <!-- Collapsed successor states for actions 2 & 3 -->
+    <text class="rl-dots" x="440" y="219" text-anchor="middle">...</text>
+    <text class="rl-dots" x="440" y="324" text-anchor="middle">...</text>
+
+    <!-- Next action nodes (from successor state s_1) -->
+    <circle class="rl-action" cx="635" cy="30" r="11"/>
+    <text class="rl-label" x="646" y="16" text-anchor="start"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></text>
+    <circle class="rl-action" cx="635" cy="70" r="11"/>
+    <text class="rl-label" x="646" y="56" text-anchor="start"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">2</tspan></text>
+    <circle class="rl-action" cx="635" cy="110" r="11"/>
+    <text class="rl-label" x="646" y="96" text-anchor="start"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">3</tspan></text>
+
+    <!-- Collapsed next actions for s_n -->
+    <text class="rl-dots" x="635" y="154" text-anchor="middle">...</text>
+  </svg>
+</figure>
+
+We are at state <span style="background-color: #d65344; color: white; border-radius: 999px; padding: 0.1em 0.5em; display: inline-block; line-height: 1.4;">$\boldsymbol{s}$</span>. From there, we sample a next action <span style="background-color: #c0d3f5; border-radius: 999px; padding: 0.1em 0.5em; display: inline-block; line-height: 1.4;">$$A_{t + 1}$$</span>, which transitions into an unknown new state <span style="background-color: #f1cab6; border-radius: 999px; padding: 0.1em 0.5em; display: inline-block; line-height: 1.4;">$$S_{t + 1}$$</span>, and so on. So, the expectation becomes:
+
+$$
+\begin{align*}
+v_\pi(s) &= \sum_{a \in \mathcal{A}} \pi(a \mid s)  \left( \mathcal{R}_s^a + \gamma \mathcal{P}_{[s,:]}^a \cdot v_\pi \right)
+\end{align*}
 $$
 
 ### Action-Value Function ($q$)
@@ -290,15 +412,15 @@ But we're not actually done yet, because we're being imprecise about what $$R_{t
   @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:ital@0;1&display=swap');
   .rl-tree {
     margin: 1.5rem 0; text-align: center;
-    --rl-state-color: #f7ad8f;
-    --rl-action-color: #9fbeff;
+    --rl-state-color: #f1cab6;
+    --rl-action-color: #c0d3f5;
     --rl-node-r: 11px;
   }
   .rl-tree svg { width: 100%; height: auto; max-width: 680px; font-family: "Roboto Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; }
   .rl-tree .rl-node { fill: var(--rl-state-color); stroke: var(--rl-state-color); stroke-width: 2.5; r: var(--rl-node-r); }
   .rl-tree .rl-action { fill: var(--rl-action-color); stroke: var(--rl-action-color); stroke-width: 1.5; r: var(--rl-node-r); }
-  .rl-tree .rl-arrow { stroke: #888888; stroke-width: 2; fill: none; }
-  .rl-tree .rl-label { font-weight: 700; font-size: 19px; fill: var(--text-color, #1f2328); }
+  .rl-tree .rl-arrow { stroke: #b0b0b0; stroke-width: 2; fill: none; }
+  .rl-tree .rl-label { font-weight: 700; font-size: 18px; fill: var(--text-color, #1f2328); }
   .rl-tree .rl-edge { font-size: 17px; fill: var(--text-color, #1f2328); }
   .rl-tree .rl-var { font-style: italic; }
   .rl-tree .rl-sub { font-size: 0.72em; }
@@ -308,25 +430,31 @@ But we're not actually done yet, because we're being imprecise about what $$R_{t
 </style>
 
 <figure class="rl-tree" markdown="0">
-  <svg viewBox="0 0 720 380" role="img" aria-label="Decision tree: state s leads to three action nodes; the first action fans out into successor states; the first successor state fans out again into the next layer of action nodes.">
+  <svg viewBox="0 0 730 340" role="img" aria-label="Decision tree: state s leads to three action nodes; the first action fans out into successor states; the first successor state fans out again into the next layer of action nodes.">
     <defs>
       <marker id="rl-arrowhead" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-        <path d="M0,0 L10,5 L0,10 z" fill="#888888"/>
+        <path d="M0,0 L10,5 L0,10 z" fill="#b0b0b0"/>
+      </marker>
+      <marker id="rl-arrowhead-black" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="black"/>
+      </marker>
+      <marker id="rl-arrowhead-verylight" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#dcdcdc"/>
       </marker>
     </defs>
 
     <!-- Edges: state s -> action nodes -->
-    <path class="rl-arrow" d="M63,215 C148,215 148,110 234,110" marker-end="url(#rl-arrowhead)"/>
-    <path class="rl-arrow" d="M63,215 C148,215 148,215 234,215" marker-end="url(#rl-arrowhead)"/>
-    <path class="rl-arrow" d="M63,215 C148,215 148,320 234,320" marker-end="url(#rl-arrowhead)"/>
+    <path class="rl-arrow" d="M63,215 C148,215 148,215 234,215" style="stroke: #dcdcdc;" marker-end="url(#rl-arrowhead-verylight)"/>
+    <path class="rl-arrow" d="M63,215 C148,215 148,320 234,320" style="stroke: #dcdcdc;" marker-end="url(#rl-arrowhead-verylight)"/>
+    <path class="rl-arrow" d="M63,215 C148,215 148,110 234,110" style="stroke: black;" marker-end="url(#rl-arrowhead-black)"/>
 
     <!-- Edges: action node 1 -> successor states -->
     <path class="rl-arrow" d="M258,110 C344,110 344,70 429,70" marker-end="url(#rl-arrowhead)"/>
     <path class="rl-arrow" d="M258,110 C344,110 344,150 429,150" marker-end="url(#rl-arrowhead)"/>
 
     <!-- Edges: action nodes 2 & 3 -> "..." (collapsed successor states) -->
-    <path class="rl-arrow" d="M258,215 C341,215 341,215 424,215" marker-end="url(#rl-arrowhead)"/>
-    <path class="rl-arrow" d="M258,320 C341,320 341,320 424,320" marker-end="url(#rl-arrowhead)"/>
+    <path class="rl-arrow" d="M258,215 C341,215 341,215 424,215" style="stroke: #dcdcdc;" marker-end="url(#rl-arrowhead-verylight)"/>
+    <path class="rl-arrow" d="M258,320 C341,320 341,320 424,320" style="stroke: #dcdcdc;" marker-end="url(#rl-arrowhead-verylight)"/>
 
     <!-- Edges: successor state s_1 -> next action nodes -->
     <path class="rl-arrow" d="M453,70 C538,70 538,30 624,30" marker-end="url(#rl-arrowhead)"/>
@@ -337,28 +465,33 @@ But we're not actually done yet, because we're being imprecise about what $$R_{t
     <path class="rl-arrow" d="M453,150 C536,150 536,150 619,150" marker-end="url(#rl-arrowhead)"/>
 
     <!-- Edge labels: a_i + R_{t+1} -->
-    <text class="rl-edge" x="130" y="150" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub rl-var" baseline-shift="sub">s</tspan><tspan class="rl-sup" baseline-shift="super" dx="-4"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan></text>
-    <text class="rl-edge" x="150" y="207" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub rl-var" baseline-shift="sub">s</tspan><tspan class="rl-sup" baseline-shift="super" dx="-4"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">2</tspan></tspan></text>
-    <text class="rl-edge" x="150" y="285" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub rl-var" baseline-shift="sub">s</tspan><tspan class="rl-sup" baseline-shift="super" dx="-4"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">3</tspan></tspan></text>
+    <text class="rl-edge" x="140" y="140" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub rl-var" baseline-shift="sub">s</tspan><tspan class="rl-sup" baseline-shift="super" dx="-4"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan></text>
+    <text class="rl-edge" x="150" y="200" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub rl-var" baseline-shift="sub">s</tspan><tspan class="rl-sup" baseline-shift="super" dx="-4"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">2</tspan></tspan></text>
+    <text class="rl-edge" x="160" y="260" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub rl-var" baseline-shift="sub">s</tspan><tspan class="rl-sup" baseline-shift="super" dx="-4"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">3</tspan></tspan></text>
+
+    <!-- Edge labels from s_1 to next action nodes -->
+    <text class="rl-edge" x="590" y="16" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub" baseline-shift="sub"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan><tspan class="rl-sup" baseline-shift="super" dx="-9"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan></text>
+    <text class="rl-edge" x="590" y="54" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub" baseline-shift="sub"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan><tspan class="rl-sup" baseline-shift="super" dx="-9"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">2</tspan></tspan></text>
+    <text class="rl-edge" x="590" y="92" text-anchor="middle"><tspan class="rl-var">R</tspan><tspan class="rl-sub" baseline-shift="sub"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></tspan><tspan class="rl-sup" baseline-shift="super" dx="-9"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">3</tspan></tspan></text>
 
     <!-- Root state node: s -->
-    <circle class="rl-node" cx="50" cy="215" r="11"/>
+    <circle class="rl-node" cx="50" cy="215" r="11" style="fill: #d65344; stroke: #d65344;"/>
     <text class="rl-label" x="50" y="246" text-anchor="middle"><tspan class="rl-var">s</tspan></text>
 
     <!-- Action nodes (from s) -->
-    <circle class="rl-action" cx="245" cy="110" r="11"/>
-    <text class="rl-label" x="245" y="92" text-anchor="middle"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></text>
-    <circle class="rl-action" cx="245" cy="215" r="11"/>
-    <text class="rl-label" x="245" y="197" text-anchor="middle"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">2</tspan></text>
-    <circle class="rl-action" cx="245" cy="320" r="11"/>
-    <text class="rl-label" x="245" y="302" text-anchor="middle"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">3</tspan></text>
+    <circle class="rl-action" cx="245" cy="110" r="11" style="fill: #5977e3; stroke: #5977e3;"/>
+    <text class="rl-label" x="245" y="88" text-anchor="middle"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></text>
+    <circle class="rl-action" cx="245" cy="215" r="11" style="fill: #dcdcdc; stroke: #dcdcdc;"/>
+    <text class="rl-label" x="245" y="193" text-anchor="middle"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">2</tspan></text>
+    <circle class="rl-action" cx="245" cy="320" r="11" style="fill: #dcdcdc; stroke: #dcdcdc;"/>
+    <text class="rl-label" x="245" y="298" text-anchor="middle"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">3</tspan></text>
 
     <!-- Successor state nodes (from action 1) -->
     <circle class="rl-node" cx="440" cy="70" r="11"/>
     <text class="rl-label" x="440" y="46" text-anchor="middle"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></text>
     <text class="rl-dots" x="440" y="114" text-anchor="middle">⋮</text>
     <circle class="rl-node" cx="440" cy="150" r="11"/>
-    <text class="rl-label" x="440" y="181" text-anchor="middle"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">n</tspan></text>
+    <text class="rl-label" x="440" y="178" text-anchor="middle"><tspan class="rl-var">s</tspan><tspan class="rl-sub" baseline-shift="sub">n</tspan></text>
 
     <!-- Collapsed successor states for actions 2 & 3 -->
     <text class="rl-dots" x="440" y="219" text-anchor="middle">...</text>
@@ -366,58 +499,29 @@ But we're not actually done yet, because we're being imprecise about what $$R_{t
 
     <!-- Next action nodes (from successor state s_1) -->
     <circle class="rl-action" cx="635" cy="30" r="11"/>
+    <text class="rl-label" x="646" y="16" text-anchor="start"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">1</tspan></text>
     <circle class="rl-action" cx="635" cy="70" r="11"/>
+    <text class="rl-label" x="646" y="56" text-anchor="start"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">2</tspan></text>
     <circle class="rl-action" cx="635" cy="110" r="11"/>
+    <text class="rl-label" x="646" y="96" text-anchor="start"><tspan class="rl-var">a</tspan><tspan class="rl-sub" baseline-shift="sub">3</tspan></text>
 
     <!-- Collapsed next actions for s_n -->
     <text class="rl-dots" x="635" y="154" text-anchor="middle">...</text>
   </svg>
-  <figcaption>Two steps of the MDP backup, alternating state &rarr; action &rarr; state &rarr; action. Only the topmost branch is expanded at each layer (action 1's states <em>s</em><sub>1</sub> ... <em>s<sub>n</sub></em>, then <em>s</em><sub>1</sub>'s next actions); every other node collapses to "..." to denote the same repeating pattern.</figcaption>
+  <figcaption>The bolded s and a_1 nodes are the specified operands in q(s, a). Everything else after is unknown.</figcaption>
 </figure>
+
+As you can see from the above decision tree diagram, we only know what <span style="background-color: #d65344; color: white; border-radius: 999px; padding: 0.1em 0.5em; display: inline-block; line-height: 1.4;">$\boldsymbol{s}$</span> and <span style="background-color: #5977e3; color: white; border-radius: 999px; padding: 0.1em 0.5em; display: inline-block; line-height: 1.4;">$a$</span> are in $$q_\pi(s, a)$$, hence $$R_{t + 1} = R_s^{a = a_1}$$. The continuation of the path from there is a random variable, hence <span style="background-color: #f1cab6; border-radius: 999px; padding: 0.1em 0.5em; display: inline-block; line-height: 1.4;">$$S_{t + 1}$$</span> and <span style="background-color: #c0d3f5; border-radius: 999px; padding: 0.1em 0.5em; display: inline-block; line-height: 1.4;">$$A_{t + 1}$$</span> are random variables. To fill in this piece of information to make the Bellman Equation more precise, we have:
+
+
+$$
+\begin{align*}
+q_\pi(s, a) &= R_s^a + \gamma  \sum_{s' \in \mathcal{S}} \mathcal{P}_{s \rightarrow s'}^a \underbrace{\sum_{a' \in \mathcal{A}} \pi(a' \mid s') q_\pi(s', a')}_{\textstyle = v_\pi(s')}
+\end{align*}
+$$
+
 
 ### Connection between $q$ and $v$
 
-$v$:
+By now, we can see that $q$ and $v$ are just two sides of the same coin - one allows you to specify the next $a$, one does not.
 
-$$
-\begin{align*}
-v_\pi(s) = \sum_{a \in \mathcal{A}} \pi(a \mid s) q_\pi(s, a)
-\end{align*}
-$$
-
-$q$:
-
-$$
-\begin{align*}
-q_\pi (s, a) &= \mathcal{R}_s^a + \gamma \mathcal{P}^a_{[s,:]} \cdot v_\pi
-\end{align*}
-$$
-
-### Bellman Equation for $v$ in an MDP
-
-Same as before, but factoring in actions. There are 2 ways to derive this. The first is continuing from the relationship between $q$ and $v$:
-
-$$
-\begin{align*}
-v_\pi(s) &= \sum_{a \in \mathcal{A}} \pi(a \mid s) q_\pi(s, a) \\
-&= \sum_{a \in \mathcal{A}} \pi(a \mid s) \left(\mathcal{R}_s^a + \gamma \mathcal{P}^a_{[s,:]} \cdot v_\pi \right)
-\end{align*}
-$$
-
-The second is just directly factoring $a$ into the original $v$ equation, which was:
-
-$$
-\begin{align*}
-v(s) = \mathcal{R}_s + \gamma \mathcal{P}_{[s,:]} \cdot v
-\end{align*}
-$$
-
-So we know $\mathcal{R}_s$ is now $\mathcal{R}_s^a$, and so does $\mathcal{P}$ is also $\mathcal{P^a}$, so we need to factor those in:
-
-$$
-\begin{align*}
-v_\pi(s) = \sum_{a \in \mathcal{A}} \pi (a \mid s) \left( \mathcal{R}_s^a + \gamma \mathcal{P}^a_{[s,:]} \cdot v_\pi \right)
-\end{align*}
-$$
-
-### 
