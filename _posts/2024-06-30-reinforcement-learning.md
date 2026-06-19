@@ -1613,40 +1613,82 @@ What Q-Learning does is:
 2. We also sample an action $$A' \sim \pi(A_t \mid S_t)$$ to use to do our Q updates.
 
 <style>
-  .rlq-stage { position: relative; width: 252px; margin: 1.5rem auto; }
-  .rlq-board { display: grid; grid-template-columns: repeat(3, 80px); grid-template-rows: repeat(3, 80px); gap: 6px; }
-  .rlq-cell { border-radius: 10px; background: #ededed; transition: background-color 0.4s ease; }
-  .rlq-overlay { position: absolute; inset: 0; pointer-events: none; }
-  .rlq-arrow { position: absolute; inset: 0; width: 252px; height: 252px; overflow: visible; opacity: 0; will-change: opacity; color: var(--text-color, #1f2328); }
-  .rlq-agent { position: absolute; left: 0; top: 0; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 2rem; line-height: 1; will-change: transform, opacity; }
-  .rlq-label { position: absolute; left: 0; top: 0; font-family: 'Roboto Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace; font-style: italic; font-weight: 700; font-size: 14px; white-space: nowrap; color: var(--text-color, #1f2328); text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; opacity: 0; will-change: opacity; }
-  .rlq-label sub { font-style: italic; }
-  .rlq-caption { width: 252px; margin: 0.6rem auto 0; text-align: center; font-size: 0.9rem; opacity: 0.85; }
-  .rlq-caption i { font-family: 'Roboto Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace; }
+  .rlt-agent { font-size: 30px; pointer-events: none; will-change: transform; }
 </style>
 
-<div class="rlq-stage" id="rl-q-stage" markdown="0">
-  <div class="rlq-board"></div>
-  <div class="rlq-overlay">
-    <svg class="rlq-arrow" viewBox="0 0 252 252" aria-hidden="true">
-      <defs>
-        <marker id="rlq-arrowhead" markerUnits="userSpaceOnUse" viewBox="0 0 12 12" refX="11" refY="6"
-                markerWidth="9" markerHeight="9" orient="auto" overflow="visible">
-          <path d="M1,1 L11,6 L1,11 z" fill="currentColor"/>
-        </marker>
-      </defs>
-      <line x1="150" y1="126" x2="186" y2="126" stroke="currentColor" stroke-width="2" marker-end="url(#rlq-arrowhead)"/>
-    </svg>
-    <div class="rlq-agent rlq-robot">🤖</div>
-    <div class="rlq-agent rlq-duck">🦆</div>
-    <div class="rlq-label rlq-lbl-r">R<sub>t+1</sub></div>
-    <div class="rlq-label rlq-lbl-aprime">A&prime;</div>
-    <div class="rlq-label rlq-lbl-a">A<sub>t+1</sub></div>
-  </div>
-</div>
+<figure class="rl-tree" id="rl-traj" markdown="0">
+  <svg viewBox="0 -60 850 400" role="img" aria-label="Animation: a robot follows a trajectory from state S_t through action A_{t+1} to state S_{t+1}, where a duck (target policy A') joins the robot (behaviour policy A_{t+1}).">
+    <defs>
+      <marker id="rlt-mk-grey" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#b0b0b0"/>
+      </marker>
+      <marker id="rlt-mk-e1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path id="rlt-e1-head" d="M0,0 L10,5 L0,10 z" fill="#b0b0b0"/>
+      </marker>
+      <marker id="rlt-mk-e2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path id="rlt-e2-head" d="M0,0 L10,5 L0,10 z" fill="#b0b0b0"/>
+      </marker>
+      <marker id="rlt-mk-e3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path id="rlt-e3-head" d="M0,0 L10,5 L0,10 z" fill="#b0b0b0"/>
+      </marker>
+      <marker id="rlt-mk-e4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path id="rlt-e4-head" d="M0,0 L10,5 L0,10 z" fill="#b0b0b0"/>
+      </marker>
+    </defs>
 
-<div class="rlq-caption" markdown="0">🦆: <i>&pi;</i>, &nbsp; 🤖: <i>&mu;</i></div>
-<br>
+    <!-- Edges: S_t -> action nodes (first one is the traversed/active edge) -->
+    <path id="rlt-e1" class="rl-arrow" d="M63,215 C148,215 148,110 234,110" marker-end="url(#rlt-mk-e1)"/>
+    <path class="rl-arrow" d="M63,215 C148,215 148,320 234,320" marker-end="url(#rlt-mk-grey)"/>
+
+    <!-- Edges: A_{t+1} -> successor states (first one is the traversed/active edge) -->
+    <path id="rlt-e2" class="rl-arrow" d="M258,110 C344,110 344,70 429,70" marker-end="url(#rlt-mk-e2)"/>
+    <path class="rl-arrow" d="M258,110 C344,110 344,150 429,150" marker-end="url(#rlt-mk-grey)"/>
+
+    <!-- Edge: muted action node -> collapsed successors -->
+    <path class="rl-arrow" d="M258,320 C341,320 341,320 424,320" marker-end="url(#rlt-mk-grey)"/>
+
+    <!-- Edges: S_{t+1} -> next action nodes (A', A_{t+1}); both blacken on the split -->
+    <path id="rlt-e3" class="rl-arrow" d="M453,70 C538,70 538,30 624,30" marker-end="url(#rlt-mk-e3)"/>
+    <path id="rlt-e4" class="rl-arrow" d="M453,70 C538,70 538,110 624,110" marker-end="url(#rlt-mk-e4)"/>
+
+    <!-- Edge: s_n -> collapsed next actions -->
+    <path class="rl-arrow" d="M453,150 C536,150 536,150 619,150" marker-end="url(#rlt-mk-grey)"/>
+
+    <!-- Reward label on the S_t -> A_{t+1} edge -->
+    <text id="rlt-lbl-r" class="rl-edge" x="138" y="146" text-anchor="middle" style="opacity:0"><tspan class="rl-var">R</tspan><tspan class="rl-sub" baseline-shift="sub">t+1</tspan></text>
+
+    <!-- Root state node: S_t (dark red) -->
+    <circle class="rl-node" cx="50" cy="215" r="11" style="fill:#d65344;stroke:#d65344"/>
+    <text class="rl-label" x="50" y="246" text-anchor="middle"><tspan class="rl-var">S</tspan><tspan class="rl-sub" baseline-shift="sub">t</tspan></text>
+
+    <!-- Action nodes from S_t (a1 = A_{t+1} animates to dark blue; the other is muted) -->
+    <circle id="rlt-n-a1" class="rl-action" cx="245" cy="110" r="11"/>
+    <text id="rlt-lbl-a1" class="rl-label" x="245" y="138" text-anchor="middle" style="opacity:0"><tspan class="rl-var">A</tspan><tspan class="rl-sub" baseline-shift="sub">t</tspan></text>
+    <circle class="rl-action" cx="245" cy="320" r="11"/>
+
+    <!-- Successor state nodes (s1 = S_{t+1} animates to dark red) -->
+    <circle id="rlt-n-s1" class="rl-node" cx="440" cy="70" r="11"/>
+    <text id="rlt-lbl-s1" class="rl-label" x="440" y="96" text-anchor="middle" style="opacity:0"><tspan class="rl-var">S</tspan><tspan class="rl-sub" baseline-shift="sub">t+1</tspan></text>
+    <circle class="rl-node" cx="440" cy="150" r="11"/>
+
+    <!-- Collapsed successors for the muted action node -->
+    <text class="rl-dots" x="440" y="324" text-anchor="middle">...</text>
+
+    <!-- Next action nodes from S_{t+1}: A' (duck, -> yellow) and A_{t+1} (robot, -> dark blue), centred on S_{t+1} -->
+    <circle id="rlt-n-n1" class="rl-action" cx="635" cy="30" r="11"/>
+    <text id="rlt-lbl-n1" class="rl-label" x="650" y="34" text-anchor="start" style="opacity:0"><tspan class="rl-var">A</tspan>&prime;<tspan dx="6" style="font-weight:400">(<tspan class="rl-var">&pi;</tspan> chose)</tspan></text>
+    <circle id="rlt-n-n2" class="rl-action" cx="635" cy="110" r="11"/>
+    <text id="rlt-lbl-n2" class="rl-label" x="650" y="114" text-anchor="start" style="opacity:0"><tspan class="rl-var">A</tspan><tspan class="rl-sub" baseline-shift="sub">t+1</tspan><tspan dx="6" style="font-weight:400">(<tspan class="rl-var">&mu;</tspan> chose)</tspan></text>
+
+    <!-- Collapsed next actions for s_n -->
+    <text class="rl-dots" x="635" y="154" text-anchor="middle">...</text>
+
+    <!-- Agents (painted last so they sit on top of the nodes) -->
+    <text id="rlt-robot" class="rlt-agent" x="50" y="189" text-anchor="middle" dominant-baseline="central">🤖</text>
+    <text id="rlt-duck" class="rlt-agent" x="50" y="189" text-anchor="middle" dominant-baseline="central" style="opacity:0">🦆</text>
+  </svg>
+  <figcaption>🤖 follows the behaviour policy <span class="rl-var">&mu;</span> (sampling <span class="rl-var">A</span><sub>t+1</sub>); 🦆 marks the target policy <span class="rl-var">&pi;</span> (sampling <span class="rl-var">A</span>&prime;). The black path is the trajectory actually taken.</figcaption>
+</figure>
 
 This allows us to explore off-$\pi$ while updating our $Q$ values according to $\pi$.
 
@@ -1656,98 +1698,104 @@ Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha \left(R_{t + 1} + \gamma Q(S_{t + 1}
 \end{align*}
 $$
 
-A curiosity here is that we are using $R_{t + 1}$ and not $R'$. How is this consistent?
-
 
 <script>
 (function () {
   "use strict";
-  const stage = document.getElementById('rl-q-stage');
-  if (!stage || stage.dataset.init) return;
-  stage.dataset.init = '1';
+  const fig = document.getElementById('rl-traj');
+  if (!fig || fig.dataset.init) return;
+  fig.dataset.init = '1';
 
-  const boardEl = stage.querySelector('.rlq-board');
-  const duck    = stage.querySelector('.rlq-duck');
-  const robot   = stage.querySelector('.rlq-robot');
-  const arrow   = stage.querySelector('.rlq-arrow');
-  const lblR    = stage.querySelector('.rlq-lbl-r');
-  const lblAp   = stage.querySelector('.rlq-lbl-aprime');
-  const lblA    = stage.querySelector('.rlq-lbl-a');
+  const $ = sel => fig.querySelector(sel);
+  const robot = $('#rlt-robot'), duck = $('#rlt-duck');
+  const nA1 = $('#rlt-n-a1'), nS1 = $('#rlt-n-s1'), nN1 = $('#rlt-n-n1'), nN2 = $('#rlt-n-n2');
+  const e1 = $('#rlt-e1'), e2 = $('#rlt-e2'), e3 = $('#rlt-e3'), e4 = $('#rlt-e4');
+  const e1h = $('#rlt-e1-head'), e2h = $('#rlt-e2-head'), e3h = $('#rlt-e3-head'), e4h = $('#rlt-e4-head');
+  const lblR = $('#rlt-lbl-r'), lblA1 = $('#rlt-lbl-a1'), lblS1 = $('#rlt-lbl-s1');
+  const lblN1 = $('#rlt-lbl-n1'), lblN2 = $('#rlt-lbl-n2');
 
-  // ----- grid geometry (3x3) -----
-  const CELL = 80, GAP = 6, STRIDE = CELL + GAP, GREY = '#ededed', YELLOW = '#ffd54a';
-  const COLORS = ['#7598f6', '#95b7ff', '#b4cdfa', '#d1dae9'];   // path-so-far + B
-  const id = (r, c) => r * 3 + c;
-  const cx = c => c * STRIDE + CELL / 2;
-  const cy = r => r * STRIDE + CELL / 2;
+  // node centres (SVG user units, matching the static markup above)
+  const ROOT = [50, 215], A1 = [245, 110], S1 = [440, 70], N1 = [635, 30], N2 = [635, 110];
+  const PERCH = 30;                          // emoji sits this far above a node, perched on top of it
+  const OFF = 15;                            // half-gap between the perched robot/duck pair
+  const perch = n => [n[0], n[1] - PERCH];
+  const pROOT = perch(ROOT), pA1 = perch(A1), pS1 = perch(S1), pN1 = perch(N1), pN2 = perch(N2);
+  const pS1L = [pS1[0] - OFF, pS1[1]], pS1R = [pS1[0] + OFF, pS1[1]];
+
   const lp = (a, b, p) => a + (b - a) * p;
+  const at = (el, x, y) => { el.setAttribute('x', x); el.setAttribute('y', y); };
+  const clamp = p => Math.max(0, Math.min(1, p));
 
-  // cells; TL, T, M pre-coloured (the path the robot walks in along)
-  const cells = [];
-  for (let i = 0; i < 9; i++) { const d = document.createElement('div'); d.className = 'rlq-cell'; boardEl.appendChild(d); cells.push(d); }
-  cells[id(0, 0)].style.background = COLORS[0];   // TL
-  cells[id(0, 1)].style.background = COLORS[1];   // T
-  cells[id(1, 1)].style.background = COLORS[2];   // M (current state S_t)
+  // colour ramps: muted (light) -> active (dark)
+  const BLUE_L = [192, 211, 245], BLUE_D = [89, 119, 227];   // #c0d3f5 -> #5977e3
+  const RED_L  = [241, 202, 182], RED_D  = [214, 83, 68];    // #f1cab6 -> #d65344
+  const YELLOW = [255, 200, 50];                             // A' highlight (#ffc832)
+  const GREY   = [176, 176, 176], DARK   = [31, 35, 40];     // #b0b0b0 -> ~black
+  const mix = (a, b, p) => `rgb(${Math.round(lp(a[0], b[0], p))},${Math.round(lp(a[1], b[1], p))},${Math.round(lp(a[2], b[2], p))})`;
+  const paintNode = (el, l, d, p) => { const c = mix(l, d, p); el.style.fill = c; el.style.stroke = c; };
+  const paintEdge = (path, head, p) => { const c = mix(GREY, DARK, p); path.style.stroke = c; head.style.fill = c; };
 
-  // key cell centres + the two half-slots on M (robot right, duck left -> pair centred on M)
-  const TL = [cx(0), cy(0)], T = [cx(1), cy(0)], M = [cx(1), cy(1)], B = [cx(1), cy(2)], R = [cx(2), cy(1)];
-  const OFF = 20, Mr = [M[0] + OFF, M[1]], Ml = [M[0] - OFF, M[1]];
-
-  // place an element's centre at (x, y)
-  const at = (elm, x, y) => { elm.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`; };
-
-  // static label positions: R_{t+1} beside the M->R arrow, A' on B, A_{t+1} on R
-  at(lblR,  (M[0] + R[0]) / 2, M[1] + 24);
-  at(lblAp, B[0],      B[1] + 28);
-  at(lblA,  R[0],      R[1] - 28);
-
-  // ----- timeline (ms): each arrival (TL, T, M) holds for PAUSE before the next move -----
-  const PAUSE = 300, WALK = 500, SHIFT = 650, SETTLE = 350, SPLIT = 750, HOLD = 1600;
-  const DROP = 60, APEX = 45;
+  // ----- timeline (ms) -----
+  const HOLD0 = 600, HOP = 700, PAUSE = 350, SHIFT = 600, SETTLE = 350, SPLIT = 850, FINAL = 1800;
+  const APEX = 42, DROP = 30;
   const t = {};
-  t.tlPause = PAUSE;                 // dwell on TL
-  t.walk1   = t.tlPause + WALK;      // TL -> T
-  t.tPause  = t.walk1 + PAUSE;       // dwell on T
-  t.walk2   = t.tPause + WALK;       // T -> M
-  t.mPause  = t.walk2 + PAUSE;       // dwell on M
-  t.shift   = t.mPause + SHIFT;      // shift right + duck fades in / drops
-  t.settle  = t.shift + SETTLE;      // settle as a centred pair
-  t.split   = t.settle + SPLIT;      // duck -> B, robot -> R
-  const TOTAL = t.split + HOLD;      // hold the final frame
-
-  const setColors = on => {
-    cells[id(2, 1)].style.background = on ? COLORS[3] : GREY;   // B
-    cells[id(1, 2)].style.background = on ? YELLOW   : GREY;    // R
-  };
-  const setAnno = o => { lblR.style.opacity = lblAp.style.opacity = lblA.style.opacity = arrow.style.opacity = o; };
+  t.hold0  = HOLD0;                  // hover above S_t
+  t.hop1   = t.hold0 + HOP;          // robot: hover -> A_{t+1}
+  t.pause1 = t.hop1 + PAUSE;         // dwell on A_{t+1}
+  t.hop2   = t.pause1 + HOP;         // robot: A_{t+1} -> S_{t+1}
+  t.pause2 = t.hop2 + PAUSE;         // dwell on S_{t+1}
+  t.shift  = t.pause2 + SHIFT;       // duck drops in, robot slides aside
+  t.settle = t.shift + SETTLE;       // hold as a centred pair
+  t.split  = t.settle + SPLIT;       // duck -> A', robot -> A_{t+1}
+  const TOTAL = t.split + FINAL;     // hold the final frame
 
   function update(e) {
-    duck.style.opacity = 0; setColors(false); setAnno(0);        // defaults during the walk-in
-    if (e < t.tlPause) {                                         // dwell on TL
-      at(robot, TL[0], TL[1]);
-    } else if (e < t.walk1) {                                    // walk TL -> T
-      at(robot, lp(TL[0], T[0], (e - t.tlPause) / WALK), TL[1]);
-    } else if (e < t.tPause) {                                   // dwell on T
-      at(robot, T[0], T[1]);
-    } else if (e < t.walk2) {                                    // walk T -> M
-      at(robot, T[0], lp(T[1], M[1], (e - t.tPause) / WALK));
-    } else if (e < t.mPause) {                                   // dwell on M (centre)
-      at(robot, M[0], M[1]);
-    } else if (e < t.shift) {                                    // shift right to make room; duck fades in + drops to the left slot
-      const p = (e - t.mPause) / SHIFT;
-      at(robot, lp(M[0], Mr[0], p), M[1]);
-      duck.style.opacity = p; at(duck, Ml[0], Ml[1] - DROP * (1 - p));
-    } else if (e < t.settle) {                                   // settle as a centred pair (robot right, duck left)
-      at(robot, Mr[0], Mr[1]); duck.style.opacity = 1; at(duck, Ml[0], Ml[1]);
-    } else if (e < t.split) {                                    // split: duck hops to B (A'), robot slides to R (A_{t+1})
+    // ---- progressive reveals (cumulative; each loop resets cleanly because p=0 below t.* ) ----
+    const p1 = e < t.hold0  ? 0 : clamp((e - t.hold0)  / HOP);   // A_{t+1} node + edge1 + R_{t+1}
+    paintNode(nA1, BLUE_L, BLUE_D, p1);
+    paintEdge(e1, e1h, p1);
+    lblR.style.opacity = p1; lblA1.style.opacity = p1;
+
+    const p2 = e < t.pause1 ? 0 : clamp((e - t.pause1) / HOP);   // S_{t+1} node + edge2
+    paintNode(nS1, RED_L, RED_D, p2);
+    paintEdge(e2, e2h, p2);
+    lblS1.style.opacity = p2;
+
+    const p4 = e < t.settle ? 0 : clamp((e - t.settle) / SPLIT); // split: reveal A'/A_{t+1}, colour their nodes + edges
+    const p4c = Math.min(1, p4 * 1.6);
+    lblN1.style.opacity = p4c;
+    lblN2.style.opacity = p4c;
+    paintEdge(e4, e4h, p4c);                 // S_{t+1} -> A_{t+1} edge blackens
+    paintNode(nN1, BLUE_L, YELLOW, p4c);     // A'      -> yellow   (target policy pi)
+    paintNode(nN2, BLUE_L, BLUE_D, p4c);     // A_{t+1} -> dark blue (behaviour policy mu)
+
+    // ---- agent choreography (the emoji always perches on top of its node) ----
+    duck.style.opacity = 0;
+    if (e < t.hold0) {                                           // perched on top of S_t
+      at(robot, pROOT[0], pROOT[1]);
+    } else if (e < t.hop1) {                                     // hop onto A_{t+1}
+      const p = (e - t.hold0) / HOP;
+      at(robot, lp(pROOT[0], pA1[0], p), lp(pROOT[1], pA1[1], p) - APEX * 4 * p * (1 - p));
+    } else if (e < t.pause1) {
+      at(robot, pA1[0], pA1[1]);
+    } else if (e < t.hop2) {                                     // hop onto S_{t+1}
+      const p = (e - t.pause1) / HOP;
+      at(robot, lp(pA1[0], pS1[0], p), lp(pA1[1], pS1[1], p) - APEX * 4 * p * (1 - p));
+    } else if (e < t.pause2) {
+      at(robot, pS1[0], pS1[1]);
+    } else if (e < t.shift) {                                    // robot slides aside; duck fades in + drops
+      const p = (e - t.pause2) / SHIFT;
+      at(robot, lp(pS1[0], pS1R[0], p), pS1[1]);
+      duck.style.opacity = p; at(duck, lp(pS1[0], pS1L[0], p), pS1L[1] - DROP * (1 - p));
+    } else if (e < t.settle) {                                   // perched pair on S_{t+1} (robot right, duck left)
+      at(robot, pS1R[0], pS1R[1]); duck.style.opacity = 1; at(duck, pS1L[0], pS1L[1]);
+    } else if (e < t.split) {                                    // duck hops to A', robot hops to A_{t+1}
       const p = (e - t.settle) / SPLIT;
       duck.style.opacity = 1;
-      at(duck, lp(Ml[0], B[0], p), lp(Ml[1], B[1], p) - APEX * 4 * p * (1 - p));   // parabolic hop
-      at(robot, lp(Mr[0], R[0], p), R[1]);                                          // linear slide
-      setColors(true); setAnno(Math.min(1, p * 1.5));
+      at(duck,  lp(pS1L[0], pN1[0], p), lp(pS1L[1], pN1[1], p) - APEX * 4 * p * (1 - p));
+      at(robot, lp(pS1R[0], pN2[0], p), lp(pS1R[1], pN2[1], p) - APEX * 4 * p * (1 - p));
     } else {                                                     // hold the final frame
-      duck.style.opacity = 1; at(duck, B[0], B[1]); at(robot, R[0], R[1]);
-      setColors(true); setAnno(1);
+      duck.style.opacity = 1; at(duck, pN1[0], pN1[1]); at(robot, pN2[0], pN2[1]);
     }
   }
 
