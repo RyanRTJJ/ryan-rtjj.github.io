@@ -1108,85 +1108,790 @@ So let's walk through the above example to demonstrate the procedure for doing s
 
 If this were the start of the learning process, for the states that are visited once, we simply set $v(s_t) = G_t$:
 
-<!--
-  Pure inline SVG — no JS. All geometry is predetermined.
-  PAD_L=50  SQ=34  GAP=60  STRIDE=94  N=6 squares
-  Square left-x: [50,144,238,332,426,520]  right-x: [84,178,272,366,460,554]
-  Gap midpoints:  [114, 208, 302, 396, 490]
-  Layers: squares y=0-34 | arcs y=34 control=72 | rewards y=78 | brace y=90 | labels y=111
--->
-<svg width="554" height="116" viewBox="0 0 554 116"
-     role="img" aria-label="Unrolled trajectory tail (stops 6-11) showing reward terms R_{t+1} through γ⁴R_{t+5} and underbrace G_t = v(s_t)."
-     style="display:block; margin:1.5rem auto; overflow:visible;
+<div id="rl-vg-line" markdown="0"></div>
+
+<script>
+(function () {
+  "use strict";
+  const root = document.getElementById('rl-vg-line');
+  if (!root || root.dataset.init) return;
+  root.dataset.init = '1';
+
+  /* ===== Layout knobs — everything below is derived from these ===== */
+  const SQ = 34, GAP = 20, PAD_L = 50;        // square size, gap between squares, left padding
+  const STRIDE = SQ + GAP;                    // square-to-square pitch  <-- the spacing variable
+  const SQ_R = 6, RING_INSET = 2, RING_STEP = 3;
+  const ARC_DROP = 20;                        // how far the transition arcs bow below the row
+  const BRACE_R = 6, BRACE_PAD = 14;          // brace corner radius; overhang past first/last reward
+
+  // vertical bands, each stacked under the previous
+  const Y_ROW   = SQ;                         // arcs start at the row's bottom edge
+  const Y_ARC   = Y_ROW + ARC_DROP;           // arc control point
+  const Y_REW   = Y_ARC + 6;                  // reward-label baseline
+  const Y_BRACE = Y_REW + 12;                 // brace top edge
+  const Y_LABEL = Y_BRACE + 2 * BRACE_R + 15; // v(s_t)= / G_t baseline
+
+  /* ===== Data: the unrolled trajectory ===== */
+  // coolwarm(12)[2:10] in clockwise ring order (same palette as the grid above).
+  const COLORS = ['#7598f6', '#95b7ff', '#b4cdfa', '#d1dae9', '#e8d6cc', '#f5c1a8', '#f6a384', '#ea7c61'];
+  const FULL = [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2];   // full 11-stop path (index into COLORS)
+  const START = 5;                                   // render from the 6th square (1-indexed) on
+  const seen = new Array(COLORS.length).fill(0);
+  const squares = [];                                // [{ color, rings }] for the displayed tail
+  FULL.forEach((c, i) => { seen[c] += 1; if (i >= START) squares.push({ color: COLORS[c], rings: seen[c] }); });
+  const N = squares.length;
+
+  /* ===== Geometry helpers (all positions derived from STRIDE) ===== */
+  const sqLeft   = i => PAD_L + i * STRIDE;
+  const sqRight  = i => sqLeft(i) + SQ;
+  const gapMid   = i => (sqRight(i) + sqLeft(i + 1)) / 2;   // centre of the i-th transition
+  const braceX0  = gapMid(0) - BRACE_PAD;
+  const braceX1  = gapMid(N - 2) + BRACE_PAD;
+  const braceMid = (braceX0 + braceX1) / 2;
+
+  /* ===== SVG element factory ===== */
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs = {}, kids = []) => {
+    const node = document.createElementNS(NS, tag);
+    for (const k in attrs) node.setAttribute(k, attrs[k]);
+    for (const c of kids) node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    return node;
+  };
+  const sup = s => el('tspan', { 'baseline-shift': 'super', 'font-size': '9' }, [s]);
+  const sub = s => el('tspan', { 'baseline-shift': 'sub',   'font-size': '10' }, [s]);
+  const it  = s => el('tspan', { 'font-style': 'italic' }, [s]);
+
+  /* ===== Builders, one per layer ===== */
+  function squareEls(i, { color, rings }) {
+    const out = [el('rect', { x: sqLeft(i), y: 0, width: SQ, height: SQ, rx: SQ_R, fill: color })];
+    for (let k = 0; k < rings; k++) {                 // k concentric hollow rings, nested inward
+      const inset = RING_INSET + k * RING_STEP;
+      out.push(el('rect', {
+        x: sqLeft(i) + inset, y: inset, width: SQ - 2 * inset, height: SQ - 2 * inset,
+        rx: Math.max(1, SQ_R - inset), fill: 'none', stroke: 'white', 'stroke-width': 1,
+      }));
+    }
+    return out;
+  }
+  const arcEl = i => el('path', {                     // transition arc from sq i down to sq i+1
+    d: `M${sqRight(i)},${Y_ROW} Q${gapMid(i)},${Y_ARC} ${sqLeft(i + 1)},${Y_ROW}`,
+    'marker-end': 'url(#rlvg-archead)',
+  });
+  function rewardEl(i) {                              // γ^i R_{t+i+1}, centred under the i-th arc
+    const kids = [];
+    if (i >= 1) kids.push('γ');
+    if (i >= 2) kids.push(sup(String(i)));
+    kids.push(it('R'), sub('t+' + (i + 1)));
+    return el('text', { x: gapMid(i), y: Y_REW, 'text-anchor': 'middle' }, kids);
+  }
+  const bracePath = (x0, x1, y, r) => {              // upward-opening underbrace, nub at centre
+    const xm = (x0 + x1) / 2;
+    return `M${x0},${y} q0,${r} ${r},${r} L${xm - r},${y + r} q${r},0 ${r},${r}`
+         + ` q0,${-r} ${r},${-r} L${x1 - r},${y + r} q${r},0 ${r},${-r}`;
+  };
+
+  /* ===== Assemble ===== */
+  const W = sqRight(N - 1), H = Y_LABEL + 6;
+  const svg = el('svg', {
+    width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'img',
+    'aria-label': 'Unrolled trajectory tail (stops 6-11): reward terms under transition arcs, under-braced as G_t = v(s_t).',
+    style: "display:block; margin:1.5rem auto; overflow:visible;"
+         + "font-family:'Roboto Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;"
+         + "color:var(--text-color,#1f2328);",
+  });
+
+  // arrowhead marker (triangle inset 1px inside a padded box -> corners never clip)
+  svg.appendChild(el('defs', {}, [
+    el('marker', {
+      id: 'rlvg-archead', markerUnits: 'userSpaceOnUse', viewBox: '0 0 12 12',
+      refX: 11, refY: 6, markerWidth: 8, markerHeight: 8, orient: 'auto', overflow: 'visible',
+    }, [el('path', { d: 'M1,1 L11,6 L1,11 z', fill: 'currentColor', stroke: 'none' })]),
+  ]));
+
+  squares.forEach((sq, i) => squareEls(i, sq).forEach(e => svg.appendChild(e)));
+
+  const arcs = el('g', { stroke: 'currentColor', fill: 'none', 'stroke-width': 1.2 });
+  for (let i = 0; i < N - 1; i++) arcs.appendChild(arcEl(i));
+  svg.appendChild(arcs);
+
+  const rewards = el('g', { 'font-size': 13, fill: 'currentColor' });
+  for (let i = 0; i < N - 1; i++) rewards.appendChild(rewardEl(i));
+  svg.appendChild(rewards);
+
+  svg.appendChild(el('path', {
+    d: bracePath(braceX0, braceX1, Y_BRACE, BRACE_R),
+    stroke: 'currentColor', fill: 'none', 'stroke-width': 1.2,
+  }));
+
+  // v(s_t) =   — s_t is coloured like the first square (it labels that square)
+  const sColor = squares[0].color;
+  const stEl = el('tspan', { fill: sColor }, [it('s'), sub('t')]);   // keep a handle so we can measure it
+  svg.appendChild(el('text', { x: braceX0 - 4, y: Y_LABEL, 'text-anchor': 'end', 'font-size': 13, fill: 'currentColor' },
+    [it('v'), '(', stEl, ') =']));
+  svg.appendChild(el('text', { x: braceMid, y: Y_LABEL, 'text-anchor': 'middle', 'font-size': 13, fill: 'currentColor' },
+    [it('G'), sub('t')]));
+
+  // Leader line from s_t up to the bottom-centre of the first square. We measure s_t's
+  // actual position with getBBox (no hardcoded glyph offset), re-running once the web font loads.
+  const lead = el('line', { stroke: sColor, 'stroke-width': 1.2, 'stroke-dasharray': '2 2' });
+  svg.appendChild(lead);
+  const placeLead = () => {
+    const b = stEl.getBBox();
+    lead.setAttribute('x1', b.x + b.width / 2);
+    lead.setAttribute('y1', b.y);                       // top of s_t
+    lead.setAttribute('x2', sqLeft(0) + SQ / 2);        // bottom-centre of the first square
+    lead.setAttribute('y2', Y_ROW);
+  };
+
+  root.appendChild(svg);
+  placeLead();                                          // measure now...
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeLead);  // ...and again after the font settles
+})();
+</script>
+
+However, if it weren't the start of the learning process, there may already be several prior episodes where we saw the same <span style="color: #f5c1a8"><b>state</b></span> featured:
+
+#### Previous Episodes:
+
+<style>
+  .rl-ep { display: block; margin: 1rem 0; max-width: 100%; height: auto; overflow: visible;
+           color: var(--text-color, #1f2328); }  /* arrows inherit the page font, like the reference chain */
+  .rl-ep-glow { filter: drop-shadow(0 0 3px #ea7c61) drop-shadow(0 0 6px #ea7c61); }  /* halo on the highlighted COLORS[5] squares */
+</style>
+
+<div id="rl-eps" markdown="0"></div>
+
+<script>
+(function () {
+  "use strict";
+  const host = document.getElementById('rl-eps');
+  if (!host || host.dataset.init) return;
+  host.dataset.init = '1';
+
+  // coolwarm(12)[2:10] — same palette as every other diagram.
+  const COLORS = ['#7598f6', '#95b7ff', '#b4cdfa', '#d1dae9', '#e8d6cc', '#f5c1a8', '#f6a384', '#ea7c61'];
+  const EPISODES = [
+    [0, 1, 2, 3, 4, 5, 6],
+    [0, 1, 2, 3, 4, 5, 6, 7, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7, 6, 5, 4],
+  ];
+  const HILITE = 5;   // the state whose return G we brace (first COLORS[5])
+
+  /* ===== shared helpers ===== */
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs = {}, kids = []) => {
+    const node = document.createElementNS(NS, tag);
+    for (const k in attrs) node.setAttribute(k, attrs[k]);
+    for (const c of kids) node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    return node;
+  };
+  const bracePath = (x0, x1, y, r) => {              // upward-opening underbrace, nub at centre
+    const xm = (x0 + x1) / 2;
+    return `M${x0},${y} q0,${r} ${r},${r} L${xm - r},${y + r} q${r},0 ${r},${r}`
+         + ` q0,${-r} ${r},${-r} L${x1 - r},${y + r} q${r},0 ${r},${-r}`;
+  };
+
+  /* ===== layout knobs — shared by every chain; positions all derive from STRIDE ===== */
+  const SQ = 30, GAP = 18, PAD = 2, STRIDE = SQ + GAP;
+  const SQ_R = 6, BRACE_R = 6;
+  const Y_ROW = SQ, Y_ARROW = SQ / 2;                // arrows sit at the row's mid-height
+  const Y_BRACE = Y_ROW + 10;                        // top of the first brace
+  const LABEL_DROP = 2 * BRACE_R + 15;               // brace top -> its "G" baseline
+  const BLOCK = LABEL_DROP - 6;                       // vertical pitch between stacked braces
+
+  const sqLeft  = i => PAD + i * STRIDE;
+  const sqRight = i => sqLeft(i) + SQ;
+  const gapMid  = i => (sqRight(i) + sqLeft(i + 1)) / 2;   // centre of the i-th transition
+
+  function renderChain(seq) {
+    const n = seq.length;
+    const occ = seq.reduce((a, c, i) => (c === HILITE ? a.concat(i) : a), []);  // every highlighted state
+    const W = sqRight(n - 1) + PAD;
+    const H = Y_BRACE + (occ.length - 1) * BLOCK + LABEL_DROP + 6;              // room for all stacked braces
+
+    const svg = el('svg', { class: 'rl-ep', width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'img',
+      'aria-label': 'Episode trajectory; one return G is braced from each visit of the highlighted state to the end.' });
+
+    // squares (the highlighted COLORS[5] state gets a glow)
+    seq.forEach((c, i) => {
+      const r = el('rect', { x: sqLeft(i), y: 0, width: SQ, height: SQ, rx: SQ_R, fill: COLORS[c] });
+      if (c === HILITE) r.setAttribute('class', 'rl-ep-glow');
+      svg.appendChild(r);
+    });
+
+    // → arrows between adjacent squares (page font + size to match the reference chain)
+    for (let i = 0; i < n - 1; i++)
+      svg.appendChild(el('text', { x: gapMid(i), y: Y_ARROW, 'text-anchor': 'middle',
+        'dominant-baseline': 'central', 'font-size': 14, fill: 'currentColor' }, ['→']));
+
+    // one underbrace + G per visit of the highlighted state: from that visit to the end, stacked downward
+    const MONO = "'Roboto Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace";
+    occ.forEach((idx, j) => {
+      const x0 = gapMid(idx), x1 = sqRight(n - 1), yTop = Y_BRACE + j * BLOCK;
+      svg.appendChild(el('path', { d: bracePath(x0, x1, yTop, BRACE_R),
+        stroke: 'currentColor', fill: 'none', 'stroke-width': 1.2 }));
+      svg.appendChild(el('text', { x: (x0 + x1) / 2, y: yTop + LABEL_DROP, 'text-anchor': 'middle',
+        'font-family': MONO, 'font-size': 14, 'font-style': 'italic', fill: 'currentColor' }, ['G']));
+    });
+
+    host.appendChild(svg);
+  }
+
+  EPISODES.forEach(renderChain);
+})();
+</script>
+
+So this means that you have to keep a running count of how many times you've updated $v(s)$ for each $s$, so that you can scale updates properly such that $v(s)$ always reflects the mean. Specifically, this means that everytime you see an episode suffix beginning with state $s$, you do:
+1. $n(s) \leftarrow n(s) + 1$
+2. $v(s) \leftarrow v(s) + \frac{1}{n(s)}(G - v(s))$
+
+In non-stationary problems, it can sometimes also be useful to just prioritize more recent values and let old values decay, so we just do:
+- $v(s) \leftarrow v(s) + \alpha(G - v(s))$
+
+## 4.2. Sampling Actions: Temporal-Difference RL (TD Learning)
+
+TD-Learning is conceptually the same as MC Learning: it's model-free, so we use sampling to try and estimate the mean value of states. The one key difference is that MC uses full trajectories / episodes, while TD-Learning uses current value estimates of successor states, just like in the Bellman Equation for MDPs. This means that TD-Learning can also be used in non-terminating environments, whereas MC can only be applied in episodic environments.
+
+### 4.2.1. TD(0)
+
+$$
+\begin{align*}
+V(S_t) \leftarrow V(S_t) + \alpha (\underbrace{\underbrace{R_{t + 1} + \gamma V(S_{t+1})}_{\textstyle \text{TD target}} - V(S_t)}_{\textstyle \delta_t = \text{TD error}})
+\end{align*}
+$$
+
+Pictorially:
+
+<div id="rl-td-chain" markdown="0"></div>
+
+<script>
+(function () {
+  "use strict";
+  const host = document.getElementById('rl-td-chain');
+  if (!host || host.dataset.init) return;
+  host.dataset.init = '1';
+
+  // COLORS[0..6] then a tail of greys stepping toward white. The one-step TD(0) backup is
+  // drawn on the S_t -> S_{t+1} transition; the greys are the rest of the episode TD never rolls out.
+  const FILLS = ['#7598f6', '#95b7ff', '#b4cdfa', '#d1dae9', '#e8d6cc', '#f5c1a8', '#f6a384',
+                 '#e6e6e6', '#f0f0f0', '#fafafa'];
+  const HILITE = '#f5c1a8';   // COLORS[5] = S_t (glows)
+  const TD = 5;               // transition 5 -> 6 is the one-step backup
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs = {}, kids = []) => {
+    const node = document.createElementNS(NS, tag);
+    for (const k in attrs) node.setAttribute(k, attrs[k]);
+    for (const c of kids) node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    return node;
+  };
+  const MONO = "'Roboto Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace";
+  const it  = s => el('tspan', { 'font-style': 'italic' }, [s]);
+  const sub = (s, sz) => el('tspan', { 'baseline-shift': 'sub', 'font-size': sz || 9 }, [s]);
+
+  // layout — vertical bands stacked under the row
+  const SQ = 30, GAP = 18, PAD = 2, STRIDE = SQ + GAP, SQ_R = 6, ARC_DROP = 16;
+  const Y_ROW = SQ;                    // square bottom (arc + leaders start here)
+  const Y_ARC = Y_ROW + ARC_DROP;      // arc control point
+  const Y_REW = Y_ARC + 5;             // R_{t+1} baseline (just below the arc)
+  const Y_VLABEL = Y_REW + 22;         // V(...) baseline
+  const sqLeft  = i => PAD + i * STRIDE;
+  const sqRight = i => sqLeft(i) + SQ;
+  const sqMid   = i => sqLeft(i) + SQ / 2;
+  const gapMid  = i => (sqRight(i) + sqLeft(i + 1)) / 2;
+
+  const n = FILLS.length, W = sqRight(n - 1) + PAD, H = Y_VLABEL + 8;
+  const svg = el('svg', { class: 'rl-ep', width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'img',
+    'aria-label': 'TD(0): one-step backup R_{t+1} from S_t to S_{t+1}, with the rest of the episode greyed out.' });
+
+  // arrowhead marker for the curved TD arc (triangle inset inside a padded box -> no clipping)
+  svg.appendChild(el('defs', {}, [
+    el('marker', { id: 'rltd-archead', markerUnits: 'userSpaceOnUse', viewBox: '0 0 12 12',
+      refX: 11, refY: 6, markerWidth: 8, markerHeight: 8, orient: 'auto', overflow: 'visible' },
+      [el('path', { d: 'M1,1 L11,6 L1,11 z', fill: 'currentColor', stroke: 'none' })]),
+  ]));
+
+  // squares (S_t glows)
+  FILLS.forEach((f, i) => {
+    const r = el('rect', { x: sqLeft(i), y: 0, width: SQ, height: SQ, rx: SQ_R, fill: f });
+    if (f === HILITE) r.setAttribute('class', 'rl-ep-glow');
+    svg.appendChild(r);
+  });
+
+  // straight → for every transition except the TD step (curved arc) and the grey tail
+  // (no arrows between grey squares — i.e. transitions starting at the first grey, i >= n-3)
+  for (let i = 0; i < n - 1; i++) {
+    if (i === TD || i >= n - 3) continue;
+    svg.appendChild(el('text', { x: gapMid(i), y: SQ / 2, 'text-anchor': 'middle',
+      'dominant-baseline': 'central', 'font-size': 14, fill: 'currentColor' }, ['→']));
+  }
+
+  // curved arc on S_t -> S_{t+1}, labelled R_{t+1}
+  svg.appendChild(el('path', { d: `M${sqRight(TD)},${Y_ROW} Q${gapMid(TD)},${Y_ARC} ${sqLeft(TD + 1)},${Y_ROW}`,
+    stroke: 'currentColor', fill: 'none', 'stroke-width': 1.2, 'marker-end': 'url(#rltd-archead)' }));
+  svg.appendChild(el('text', { x: gapMid(TD), y: Y_REW, 'text-anchor': 'middle', 'font-family': MONO,
+    'font-size': 12, fill: 'currentColor' }, [it('R'), sub('t+1', 8)]));
+
+  // V(S_t) under [5] and V(S_{t+1}) under [6]; each has a dashed leader in its square's colour
+  function vLabel(i, subText) {
+    const cx = sqMid(i), col = FILLS[i];
+    svg.appendChild(el('line', { x1: cx, y1: Y_ROW, x2: cx, y2: Y_VLABEL - 12,
+      stroke: col, 'stroke-width': 1.2, 'stroke-dasharray': '2 2' }));
+    const state = el('tspan', { fill: col }, [it('S'), sub(subText, 8)]);   // S_t coloured like its square
+    svg.appendChild(el('text', { x: cx, y: Y_VLABEL, 'text-anchor': 'middle', 'font-family': MONO,
+    'font-weight': 700,
+    'font-size': 11, fill: 'currentColor' }, [it('V'), '(', state, ')']));
+  }
+  vLabel(TD, 't');
+  vLabel(TD + 1, 't+1');
+
+  // "no need complete trajectory" superposed over the grey tail (white halo for legibility)
+  const gL = sqLeft(n - 3), gR = sqRight(n - 1), gcx = (gL + gR) / 2;
+  svg.appendChild(el('text', { x: gcx, y: 19, 'text-anchor': 'middle', 'font-style': 'italic',
+    'font-size': 11, fill: '#444', stroke: '#fff', 'stroke-width': 2.5, 'paint-order': 'stroke',
+    'stroke-linejoin': 'round' }, [
+      el('tspan', { x: gcx }, ['no need complete trajectory']),
+    ]));
+
+  host.appendChild(svg);
+})();
+</script>
+
+## 4.3. MC vs TD
+
+- MC has better convergence properties (it will converge to the true values even with function approximators for $V$)
+- MC does not assume the Markov property, whereas TD does (TD implicitly builds an MDP)
+- TD is usually much more efficient
+
+## 4.4. MC vs TD vs DP
+
+So far we've seen Dynamic Programming (Policy / Value Iteration), MC Learning, and TD Learning. They differ along 2 axes:
+- Sampling vs no sampling ("full backups")
+- Shallow vs Deep backups
+
+<svg width="500" height="296" viewBox="0 0 500 296" role="img"
+     aria-label="Two-axis chart (transposed): horizontal = backup depth (shallow to deep), vertical = backup width (sample to full). TD = sample+shallow, MC = sample+deep, DP = full+shallow, Exhaustive Search = full+deep."
+     style="display:block; margin:1.5rem auto; max-width:100%; height:auto; overflow:visible;
             font-family:'Roboto Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
             color:var(--text-color,#1f2328);"
      markdown="0">
   <defs>
-    <!-- padded-viewBox arrowhead: triangle inset 1px so corners never touch clip boundary -->
-    <marker id="rlvg-archead" markerUnits="userSpaceOnUse" viewBox="0 0 12 12"
-            refX="11" refY="6" markerWidth="8" markerHeight="8"
-            orient="auto" overflow="visible">
-      <path d="M1,1 L11,6 L1,11 z" fill="currentColor" stroke="none"/>
+    <!-- orient=auto-start-reverse lets one marker serve both ends of a double-headed arrow -->
+    <marker id="rl2ax-head" markerUnits="userSpaceOnUse" viewBox="0 0 12 12"
+            refX="11" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse" overflow="visible">
+      <path d="M1,1 L11,6 L1,11 z" fill="#9aa0a6" stroke="none"/>
     </marker>
   </defs>
 
-  <!-- ── Squares (sq6-sq11 of trajectory, coolwarm[2:10] indices 5,6,7,0,1,2) ── -->
-  <!-- sq6  x=50   #f5c1a8  1 ring -->
-  <rect x="50"  y="0" width="34" height="34" rx="6" fill="#f5c1a8"/>
-  <rect x="53"  y="3" width="28" height="28" rx="3" fill="none" stroke="white" stroke-width="0.5"/>
-  <!-- sq7  x=144  #f6a384  1 ring -->
-  <rect x="144" y="0" width="34" height="34" rx="6" fill="#f6a384"/>
-  <rect x="147" y="3" width="28" height="28" rx="3" fill="none" stroke="white" stroke-width="0.5"/>
-  <!-- sq8  x=238  #ea7c61  1 ring -->
-  <rect x="238" y="0" width="34" height="34" rx="6" fill="#ea7c61"/>
-  <rect x="241" y="3" width="28" height="28" rx="3" fill="none" stroke="white" stroke-width="0.5"/>
-  <!-- sq9  x=332  #7598f6  2 rings -->
-  <rect x="332" y="0" width="34" height="34" rx="6" fill="#7598f6"/>
-  <rect x="335" y="3" width="28" height="28" rx="3" fill="none" stroke="white" stroke-width="0.5"/>
-  <rect x="339" y="7" width="20" height="20" rx="1" fill="none" stroke="white" stroke-width="0.5"/>
-  <!-- sq10 x=426  #95b7ff  2 rings -->
-  <rect x="426" y="0" width="34" height="34" rx="6" fill="#95b7ff"/>
-  <rect x="429" y="3" width="28" height="28" rx="3" fill="none" stroke="white" stroke-width="0.5"/>
-  <rect x="433" y="7" width="20" height="20" rx="1" fill="none" stroke="white" stroke-width="0.5"/>
-  <!-- sq11 x=520  #b4cdfa  2 rings -->
-  <rect x="520" y="0" width="34" height="34" rx="6" fill="#b4cdfa"/>
-  <rect x="523" y="3" width="28" height="28" rx="3" fill="none" stroke="white" stroke-width="0.5"/>
-  <rect x="527" y="7" width="20" height="20" rx="1" fill="none" stroke="white" stroke-width="0.5"/>
-
-  <!-- ── Curved arcs below squares (from right edge of sq_i to left edge of sq_{i+1}) ── -->
-  <g stroke="currentColor" fill="none" stroke-width="1.2">
-    <path d="M84,34  Q114,72 144,34" marker-end="url(#rlvg-archead)"/>
-    <path d="M178,34 Q208,72 238,34" marker-end="url(#rlvg-archead)"/>
-    <path d="M272,34 Q302,72 332,34" marker-end="url(#rlvg-archead)"/>
-    <path d="M366,34 Q396,72 426,34" marker-end="url(#rlvg-archead)"/>
-    <path d="M460,34 Q490,72 520,34" marker-end="url(#rlvg-archead)"/>
+  <!-- two crossing double-ended axes (no border / grid) -->
+  <g stroke="#9aa0a6" stroke-width="1.2" marker-start="url(#rl2ax-head)" marker-end="url(#rl2ax-head)">
+    <line x1="60"  y1="152" x2="440" y2="152"/>   <!-- depth:  Shallow <-> Deep        -->
+    <line x1="250" y1="44"  x2="250" y2="260"/>   <!-- width:  Sample <-> Full backups -->
   </g>
 
-  <!-- ── Reward labels (centered on gap midpoints x=114,208,302,396,490; baseline y=78) ── -->
-  <g font-size="13" fill="currentColor" text-anchor="middle">
-    <text x="114" y="78"><tspan font-style="italic">R</tspan><tspan dy="4" font-size="10">t+1</tspan></text>
-    <text x="208" y="78">γ<tspan font-style="italic">R</tspan><tspan dy="4" font-size="10">t+2</tspan></text>
-    <text x="302" y="78">γ²<tspan font-style="italic">R</tspan><tspan dy="4" font-size="10">t+3</tspan></text>
-    <text x="396" y="78">γ³<tspan font-style="italic">R</tspan><tspan dy="4" font-size="10">t+4</tspan></text>
-    <text x="490" y="78">γ⁴<tspan font-style="italic">R</tspan><tspan dy="4" font-size="10">t+5</tspan></text>
+  <!-- axis-end labels -->
+  <g font-size="12" fill="#6b7280">
+    <text x="52"  y="156" text-anchor="end">Shallow</text>
+    <text x="448" y="156" text-anchor="start">Deep</text>
+    <text x="250" y="34"  text-anchor="middle">Full backups</text>
+    <text x="250" y="278" text-anchor="middle">Sample backups</text>
   </g>
 
-  <!-- ── Underbrace spanning all rewards (L=82 R=522 mid=302 y1=90 r=6) ── -->
-  <path d="M82,90 q0,6 6,6 L296,96 q6,0 6,6 q0,-6 6,-6 L516,96 q6,0 6,-6"
-        stroke="currentColor" fill="none" stroke-width="1.2"/>
-
-  <!-- ── v(s_t) = to the left of brace; G_t centred under it ── -->
-  <g font-size="13" fill="currentColor">
-    <text text-anchor="end" x="78" y="111">
-      <tspan font-style="italic">v</tspan>(<tspan font-style="italic">s</tspan><tspan dy="4" font-size="10">t</tspan><tspan dy="-4">)</tspan> =
-    </text>
-    <text text-anchor="middle" x="302" y="111" font-style="italic">
-      G<tspan dy="4" font-size="10">t</tspan>
-    </text>
+  <!-- methods, one per quadrant (flipped vertically: full backups now on top) -->
+  <g text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">
+    <text x="120" y="99">DP</text>                  <!-- full   + shallow -->
+    <text x="380" y="99">Exhaustive Search</text>  <!-- full   + deep    -->
+    <text x="120" y="215">TD</text>                 <!-- sample + shallow -->
+    <text x="380" y="215">MC</text>                 <!-- sample + deep    -->
   </g>
 </svg>
 
+## 4.5. TD($\lambda$)
 
+TD($\lambda$) is a way of interpolating between TD(0) and MC. $\lambda$ specifies how many real steps to take, before imputing the rest with current estimates of $V$. You can imagine that TD($\infty$) is equivalent to MC.
+
+### $\lambda$-return
+
+There is a concept known as $\lambda$-return, where we try to take the geometric mean between the returns computed via TD(0), TD(1), ..., TD($\infty$). This does not seem immediately useful, so I'm skipping this.
+
+# 5. How To Sample
+
+In the previous section, we arrived at a clear idea of how we may use sampled episodes / trajectories to update our $v$ values. In this section, we'll explore **how** those episodes are sampled. After all, in real RL problems, the experience we get is only what the agent has actually done.
+
+## 5.1. The Problem with $V$.
+
+Previously, we already **had** the episode / partial episode samples. We already knew which state $$S_{t + 1}$$ followed the current state $$S_t$$. When we're **generating** these trajectories, we need to know how to act. Most of the time, our action will be greedy, which means we need to take:
+
+
+$$
+\begin{align*}
+a = \operatorname*{argmax}\limits_{a \in \mathcal{A}} \left(R_{s + 1} + \gamma \mathbb{E} [V_{s + 1}]\right)
+\end{align*}
+$$
+
+
+The problem with this is that $$\mathbb{E} [V_{s + 1}]$$ requires a model: 
+
+
+$$
+\begin{align*}
+\mathbb{E} [V_{s + 1}] = \mathcal{P}_{[s:]}^a \cdot v
+\end{align*}
+$$
+
+And we don't have a model! So to solve this, we use $Q$ instead. This way, we can offload the expectation part into $Q(s, a)$.
+
+## 5.2. Explore vs Exploit
+
+The next idea is leaving room for exploration. If you only exploit the best action you've seen so far, you're susceptible to never knowing any better option. Therefore, we leave some room for exploration in the policy:
+
+
+$$
+\begin{align*}
+\pi(a \mid s) &= \begin{cases}
+\operatorname*{argmax}\limits_{a \in \mathcal{A}} Q(s, a) & \text{ with prob } 1 - \epsilon \\
+\text{random } & \text{ with prob } \epsilon
+\end{cases}
+\end{align*}
+$$
+
+
+> Epsilon-greedy Q values and policy still do guarantee improvements (since Epsilon-greedy is just a mixture of greedy and uniform-random; the uniform-random bit improves iff $q$ values improves, which it does, since the other part is greedy)
+
+### Implementation Notes
+
+In practice, we slowly decay $\epsilon \rightarrow 0$, so something like $\epsilon = 1/k$ where $k$ is the number of steps, or $\epsilon = \frac{1 + L}{k + L}$ where $L$ is some large integer.
+
+## 5.3. Online TD-Learning: SARSA
+
+Previously, we saw that TD-Learning has this update rule:
+
+
+$$
+\begin{align*}
+V(S_t) \leftarrow V(S_t) + \alpha (\underbrace{\underbrace{R_{t + 1} + \gamma V(S_{t+1})}_{\textstyle \text{TD target}} - V(S_t)}_{\textstyle \delta_t = \text{TD error}})
+\end{align*}
+$$
+
+
+The above requires us to know $$S_t, R_{t + 1}, S_{t + 1}$$. In replacing $V$ with $Q$, we now have:
+
+
+$$
+\begin{align*}
+Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha (\underbrace{\underbrace{R_{t + 1} + \gamma Q(S_{t+1}, A_{t + 1})}_{\textstyle \text{TD target}} - Q(S_t, A_{t})}_{\textstyle \delta_t = \text{TD error}})
+\end{align*}
+$$
+
+
+Observe that this requires us to know $$S_t, A_t, R_{t + 1}, S_{t + 1}, A_{t + 1}$$, hence the name SARSA. And similar to TD-$\lambda$, we can also interpolate between TD and MC in the $Q$ context by deciding how many actual steps to sample; this is known as "SARSA($\lambda$)".
+
+## 5.4. Off-Policy Learning
+
+What if you wanted to evaluate your $V$ or $Q$ values according to $\pi$, but the episodes you have were generated while following some other behavior policy $\mu$? This is mostly a question of how to use already-existing data (from other robots, humans, etc.).
+
+### 5.4.1. Importance Sampling
+
+The problem with this is that obviously the distributions $\pi$ and $\mu$ are not the same, which means that your expectations are also not the same. Here, we introduce the idea of **Importance Sampling**, which applies scaling factors to the terms in the TD Update Equation so morph $$\mathbb{E}_{\sim \mu}$$ into $$\mathbb{E}_{\sim \pi}$$:
+
+$$
+\begin{align*}
+V (S_t) \leftarrow V (S_{t + 1}) + \alpha \left( \frac{\pi (A_t \mid S_t)}{\mu (A_t \mid S_t)} \left( R_{t + 1} + \gamma V(S_{t + 1}) \right) - V(S_t) \right)
+\end{align*}
+$$
+
+But obviously you may not know what $\mu(A_t \mid S_t)$ is. If you just found a dataset of trajectories lying around, you definitely won't know what $\mu$ was.
+
+### 5.4.2. Q-Learning
+
+So we don't use Importance Sampling, we use Q-Learning (a variant of SARSA)!
+
+Unfortunately, Q-Learning doesn't address the idea of how we can use found data generated from an unknown policy. I suspect you can use classic TD-learning to learn your $V$ values and back out a policy from there that you can then use to warm-start Q-learning on your own generated data, but this is out of scope.
+
+What Q-Learning does is:
+1. We sample an action $$A_{t + 1} \sim \mu(A_t \mid S_t)$$ to actually take while exploring
+2. We also sample an action $$A' \sim \pi(A_t \mid S_t)$$ to use to do our Q updates.
+
+<style>
+  .rlq-stage { position: relative; width: 252px; margin: 1.5rem auto; }
+  .rlq-board { display: grid; grid-template-columns: repeat(3, 80px); grid-template-rows: repeat(3, 80px); gap: 6px; }
+  .rlq-cell { border-radius: 10px; background: #ededed; transition: background-color 0.4s ease; }
+  .rlq-overlay { position: absolute; inset: 0; pointer-events: none; }
+  .rlq-arrow { position: absolute; inset: 0; width: 252px; height: 252px; overflow: visible; opacity: 0; will-change: opacity; color: var(--text-color, #1f2328); }
+  .rlq-agent { position: absolute; left: 0; top: 0; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 2rem; line-height: 1; will-change: transform, opacity; }
+  .rlq-label { position: absolute; left: 0; top: 0; font-family: 'Roboto Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace; font-style: italic; font-weight: 700; font-size: 14px; white-space: nowrap; color: var(--text-color, #1f2328); text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; opacity: 0; will-change: opacity; }
+  .rlq-label sub { font-style: italic; }
+  .rlq-caption { width: 252px; margin: 0.6rem auto 0; text-align: center; font-size: 0.9rem; opacity: 0.85; }
+  .rlq-caption i { font-family: 'Roboto Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace; }
+</style>
+
+<div class="rlq-stage" id="rl-q-stage" markdown="0">
+  <div class="rlq-board"></div>
+  <div class="rlq-overlay">
+    <svg class="rlq-arrow" viewBox="0 0 252 252" aria-hidden="true">
+      <defs>
+        <marker id="rlq-arrowhead" markerUnits="userSpaceOnUse" viewBox="0 0 12 12" refX="11" refY="6"
+                markerWidth="9" markerHeight="9" orient="auto" overflow="visible">
+          <path d="M1,1 L11,6 L1,11 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <line x1="150" y1="126" x2="186" y2="126" stroke="currentColor" stroke-width="2" marker-end="url(#rlq-arrowhead)"/>
+    </svg>
+    <div class="rlq-agent rlq-robot">🤖</div>
+    <div class="rlq-agent rlq-duck">🦆</div>
+    <div class="rlq-label rlq-lbl-r">R<sub>t+1</sub></div>
+    <div class="rlq-label rlq-lbl-aprime">A&prime;</div>
+    <div class="rlq-label rlq-lbl-a">A<sub>t+1</sub></div>
+  </div>
+</div>
+
+<div class="rlq-caption" markdown="0">🦆: <i>&pi;</i>, &nbsp; 🤖: <i>&mu;</i></div>
+<br>
+
+This allows us to explore off-$\pi$ while updating our $Q$ values according to $\pi$.
+
+$$
+\begin{align*}
+Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha \left(R_{t + 1} + \gamma Q(S_{t + 1}, A') - Q(S_t, A_t) \right)
+\end{align*}
+$$
+
+A curiosity here is that we are using $R_{t + 1}$ and not $R'$. How is this consistent?
+
+
+<script>
+(function () {
+  "use strict";
+  const stage = document.getElementById('rl-q-stage');
+  if (!stage || stage.dataset.init) return;
+  stage.dataset.init = '1';
+
+  const boardEl = stage.querySelector('.rlq-board');
+  const duck    = stage.querySelector('.rlq-duck');
+  const robot   = stage.querySelector('.rlq-robot');
+  const arrow   = stage.querySelector('.rlq-arrow');
+  const lblR    = stage.querySelector('.rlq-lbl-r');
+  const lblAp   = stage.querySelector('.rlq-lbl-aprime');
+  const lblA    = stage.querySelector('.rlq-lbl-a');
+
+  // ----- grid geometry (3x3) -----
+  const CELL = 80, GAP = 6, STRIDE = CELL + GAP, GREY = '#ededed', YELLOW = '#ffd54a';
+  const COLORS = ['#7598f6', '#95b7ff', '#b4cdfa', '#d1dae9'];   // path-so-far + B
+  const id = (r, c) => r * 3 + c;
+  const cx = c => c * STRIDE + CELL / 2;
+  const cy = r => r * STRIDE + CELL / 2;
+  const lp = (a, b, p) => a + (b - a) * p;
+
+  // cells; TL, T, M pre-coloured (the path the robot walks in along)
+  const cells = [];
+  for (let i = 0; i < 9; i++) { const d = document.createElement('div'); d.className = 'rlq-cell'; boardEl.appendChild(d); cells.push(d); }
+  cells[id(0, 0)].style.background = COLORS[0];   // TL
+  cells[id(0, 1)].style.background = COLORS[1];   // T
+  cells[id(1, 1)].style.background = COLORS[2];   // M (current state S_t)
+
+  // key cell centres + the two half-slots on M (robot right, duck left -> pair centred on M)
+  const TL = [cx(0), cy(0)], T = [cx(1), cy(0)], M = [cx(1), cy(1)], B = [cx(1), cy(2)], R = [cx(2), cy(1)];
+  const OFF = 20, Mr = [M[0] + OFF, M[1]], Ml = [M[0] - OFF, M[1]];
+
+  // place an element's centre at (x, y)
+  const at = (elm, x, y) => { elm.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`; };
+
+  // static label positions: R_{t+1} beside the M->R arrow, A' on B, A_{t+1} on R
+  at(lblR,  (M[0] + R[0]) / 2, M[1] + 24);
+  at(lblAp, B[0],      B[1] + 28);
+  at(lblA,  R[0],      R[1] - 28);
+
+  // ----- timeline (ms): each arrival (TL, T, M) holds for PAUSE before the next move -----
+  const PAUSE = 300, WALK = 500, SHIFT = 650, SETTLE = 350, SPLIT = 750, HOLD = 1600;
+  const DROP = 60, APEX = 45;
+  const t = {};
+  t.tlPause = PAUSE;                 // dwell on TL
+  t.walk1   = t.tlPause + WALK;      // TL -> T
+  t.tPause  = t.walk1 + PAUSE;       // dwell on T
+  t.walk2   = t.tPause + WALK;       // T -> M
+  t.mPause  = t.walk2 + PAUSE;       // dwell on M
+  t.shift   = t.mPause + SHIFT;      // shift right + duck fades in / drops
+  t.settle  = t.shift + SETTLE;      // settle as a centred pair
+  t.split   = t.settle + SPLIT;      // duck -> B, robot -> R
+  const TOTAL = t.split + HOLD;      // hold the final frame
+
+  const setColors = on => {
+    cells[id(2, 1)].style.background = on ? COLORS[3] : GREY;   // B
+    cells[id(1, 2)].style.background = on ? YELLOW   : GREY;    // R
+  };
+  const setAnno = o => { lblR.style.opacity = lblAp.style.opacity = lblA.style.opacity = arrow.style.opacity = o; };
+
+  function update(e) {
+    duck.style.opacity = 0; setColors(false); setAnno(0);        // defaults during the walk-in
+    if (e < t.tlPause) {                                         // dwell on TL
+      at(robot, TL[0], TL[1]);
+    } else if (e < t.walk1) {                                    // walk TL -> T
+      at(robot, lp(TL[0], T[0], (e - t.tlPause) / WALK), TL[1]);
+    } else if (e < t.tPause) {                                   // dwell on T
+      at(robot, T[0], T[1]);
+    } else if (e < t.walk2) {                                    // walk T -> M
+      at(robot, T[0], lp(T[1], M[1], (e - t.tPause) / WALK));
+    } else if (e < t.mPause) {                                   // dwell on M (centre)
+      at(robot, M[0], M[1]);
+    } else if (e < t.shift) {                                    // shift right to make room; duck fades in + drops to the left slot
+      const p = (e - t.mPause) / SHIFT;
+      at(robot, lp(M[0], Mr[0], p), M[1]);
+      duck.style.opacity = p; at(duck, Ml[0], Ml[1] - DROP * (1 - p));
+    } else if (e < t.settle) {                                   // settle as a centred pair (robot right, duck left)
+      at(robot, Mr[0], Mr[1]); duck.style.opacity = 1; at(duck, Ml[0], Ml[1]);
+    } else if (e < t.split) {                                    // split: duck hops to B (A'), robot slides to R (A_{t+1})
+      const p = (e - t.settle) / SPLIT;
+      duck.style.opacity = 1;
+      at(duck, lp(Ml[0], B[0], p), lp(Ml[1], B[1], p) - APEX * 4 * p * (1 - p));   // parabolic hop
+      at(robot, lp(Mr[0], R[0], p), R[1]);                                          // linear slide
+      setColors(true); setAnno(Math.min(1, p * 1.5));
+    } else {                                                     // hold the final frame
+      duck.style.opacity = 1; at(duck, B[0], B[1]); at(robot, R[0], R[1]);
+      setColors(true); setAnno(1);
+    }
+  }
+
+  let startTs = null;
+  function frame(ts) {
+    if (startTs == null) startTs = ts;
+    update((ts - startTs) % TOTAL);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+
+# 6. Function Approximators
+
+Sometimes, RL problems can be huge, or states can be continuous. So what do we do? Use function approximators! This section will only cover deep networks since they are universal function approximators.
+
+## 6.1. Formulation
+
+Suppose our state $S$ is a vector (hence continuous), then the formulation is simply that $V$ is a deep network that outputs the estimate of $$V_\pi(S)$$.
+
+Our TD updates used to be this:
+
+$$
+\begin{align*}
+V(S_t) \leftarrow V(S_t) + \alpha (\underbrace{\underbrace{R_{t + 1} + \gamma V(S_{t+1})}_{\textstyle \text{TD target}} - V(S_t)}_{\textstyle \delta_t = \text{TD error}})
+\end{align*}
+$$
+
+Everything is conceptually the same as before (we update towards the TD target), except that now:
+- We use $\hat{V}_w$ instead of $V$ to denote that the value is just an estimate parameterized by $w$ (the weights of the deep network)
+- We update $w$, which in turn updates the value generated by $V$
+
+In ML parlance, we have:
+
+#### Error
+
+Something like MSE:
+
+$$
+\begin{align*}
+\frac{1}{2}
+\left(
+    R_{t + 1} + \gamma \hat{V}_w(S_{t+1}) - \hat{V}_w(S_t)
+)
+\right)^2
+\end{align*}
+$$
+
+#### Gradient
+
+$$
+\begin{align*}
+\left(
+    R_{t + 1} + \gamma \hat{V}_w(S_{t+1}) - \hat{V}_w(S_t)
+)
+\right) \nabla(- \hat{V}_w(s_t))
+\end{align*}
+$$
+
+#### Update
+
+Negative Gradient $\times$ learning rate:
+
+$$
+\begin{align*}
+\Delta w = \alpha
+\left(
+    R_{t + 1} + \gamma \hat{V}_w(S_{t+1}) - \hat{V}_w(S_t)
+)
+\right) \nabla(\hat{V}_w(s_t))
+\end{align*}
+$$
+
+A similar thing can be done for $Q$, but for $Q$, you have several options for the shape of $\hat{Q}$:
+1. $Q: \mathbb{R}^\text{state dim} \rightarrow \mathbb{R}^\text{action dim}$ (useful for discrete action space)
+2. $Q: \mathbb{R}^\text{state dim + action dim} \rightarrow \mathbb{R}^1$
+
+## 6.2. Convergence & Efficiency
+
+As you can see, not only are our $\hat{V}_w$ values changing, the way we compute those $\hat{V}_w$ values (i.e. $w$) is also changing (moving target). This can cause convergence troubles. Moreover, doing gradient descent after every sampled SARSA tuple is inefficient. Here's where we solve both problems with Deep-Q Networks.
+
+### 6.2.1. Deep-Q Networks (DQN)
+
+In the below code, you'll see:
+- We have `q_net_target`, which is updated much less frequently than `q_net`. This solves the problem where $\hat{Q}_w$ is always moving (moving target problem).
+- `q_net_target` is updated softly (interpolated between `q_net` and `q_net_target`).
+
+#### Implementation
+```python
+def soft_update_q_target(q_net, q_net_target, tau):
+    """
+    Desc:                   Architecture-agnostic helper function to copy weights.
+
+    @param q_net:           (type[nn.Module]) The source net
+    @param q_net_target:    (type[nn.Module]) The dest net
+    """
+    for param, target_param in zip(q_net.parameters(), q_net_target.parameters()):
+        target_param.data.copy_(tau * param.data +
+                                (1 - tau) * target_param.data)
+
+q_net = QNet(...parameters)
+q_net_target = copy.deepcopy(q_net)
+
+for _ in range(num_train_episodes):
+    episode_reward = 0.0
+    s, _ = env.reset()
+    for _ in range(max_steps_per_episode):
+        # Step 1) we sample a transition to add to replay buffer.
+        a = select_action_eps_greedy(env, q_net, s, eps)
+        s_next, r = env.step(a)
+
+        episode_reward += r
+        replay_buffer.append((s, a, r, s_next)) # we will compute a_next on the fly
+
+        # Step 2) sample a mini batch and fit the Q network
+        if len(replay_buffer) < batch_size:
+            continue
+
+        batch_s, batch_a, batch_s_next, batch_r, batch_terminal = \
+            sample_experience_batch(replay_buffer, batch_size)
+
+        # Compute Q targets (in this case q_net goes from state_dim to action_dim)
+        batch_s_next_q_vals = q_net_target(batch_s_next)
+        batch_s_next_q_greedy = torch.max(batch_s_next_q_vals, axis=-1).values
+        batch_targets = torch.where(
+            batch_terminal,
+            batch_r,
+            batch_r + gamma * batch_s_next_q_greedy
+        )
+
+        # Update
+        q_net.train(True)
+        batch_s_q_vals = q_net(batch_s)[torch.arange(batch_size), batch_a]
+        loss = F.mse_loss(batch_s_q_vals, batch_targets.detach())
+        q_net_opt.zero_grad()
+        loss.backward()
+        q_net_opt.step()
+
+        # Update q_net_target and evaluate
+        if total_steps % q_target_update_freq == 0:
+            soft_update_q_target(q_net, q_net_target, tau)
+
+```
 
 <script>
 (function () {
