@@ -1941,6 +1941,135 @@ for _ in range(num_train_episodes):
 
 ```
 
+# 7. Policy Gradient
+
+So far, everything we've seen revolves around Value-based methods, but Value-based methods may lose out to Policy-based methods because:
+- Value-based methods require us to compute $V$ or $Q$ for our state, which may be much more tedious than a policy. For example, in pong, the value of a given state may be hard to predict, but the policy is simple: if ball is above your paddle, go up, and vice versa.
+- Computing $$a = \operatorname*{argmax}\limits_{a} q_\star(s, a)$$ in particular may also be hard because $\mathcal{A}$ may be huge.
+- Policy-based methods allow you to specify explicit, stochastic policies that are more general than $\epsilon$-greedy.
+
+Sections 7.1. to 7.5. basically speed through what metrics we might use for a policy, what naive methods there are, what better methods there are, and how we might implement those.
+
+## 7.1. Policy Objective Functions
+
+Given some policy $\pi_\theta$ parameterized by weights $\theta$, we want to optimize the policy. We first have to define how to measure the quality of $\pi_\theta$. For that, we have several options, including:
+- Using the average **start state value**
+- Using the average **state value**
+- Using the average **reward per time-step**
+
+In the above, "average" is w.r.t to the stationary distribution of the Markov chain for $\pi_\theta$.
+
+## 7.2. Policy Gradients by Finite Distances
+
+One way of estimating a policy gradient w.r.t to $\pi_\theta$ is by perturbing $\theta$ by small amounts. Below shows how you would perturb $\theta$ in the $k$-th dimension:
+
+$$
+\begin{align*}
+\frac{\partial J(\theta)}{\partial \theta_k} \approx \frac{J(\theta + \epsilon \textbf{e}_k) - J(\theta)}{\epsilon}
+\end{align*}
+$$
+
+## 7.3. Analytical Policy Gradients
+
+There's also an analytical way of arriving at a policy gradient, and that's by treating the above metrics ($v$, $r$, $Q$, etc.) as constants w.r.t to $\theta$ (which they are, so I'm not sure why we had to do finite distances in the first place). To do this, I'll introduce a rearrangement of $$\nabla_{\theta} \pi_\theta (s, a)$$ and a **score function**:
+
+$$
+\begin{align*}
+\nabla_\theta \pi_\theta (s, a) &= \pi_\theta (s, a) \frac{\nabla_\theta \pi_\theta (s, a)}{\pi_\theta (s, a)} \\
+&= \pi_\theta (s, a) \underbrace{\nabla_\theta \log \pi_\theta (s, a)}_{\textstyle \text{score function}}
+\end{align*}
+$$
+
+This formulation is convenient for us because the RHS has a $$\pi_\theta (s, a)$$ factor that helps us take expectations of $$\nabla_\theta \pi_\theta (s, a)$$.
+
+
+### Example: One-Step MDPs
+
+Let's see the above convenience at play in the case of a one-step MDP, starting in state $$s \sim d(s)$$. Suppose the objective is this:
+
+$$
+\begin{align*}
+J(\theta) = \mathbb{E}_{\pi_\thetat} [r]
+\end{align*}
+$$
+
+Then plugging in the score function reformulation:
+
+$$
+\begin{align*}
+J(\theta) &= \sum_{s \in \mathcal{S}} d(s) \sum_{a \in \mathcal{A}} \pi_\theta \left( s, a \right) \mathcal{R}_{s, a} \\
+\Rightarrow \nabla_\theta J(\theta) &= \sum_{s \in \mathcal{S}} d(s) \sum_{a \in \mathcal{A}} \pi_\theta \left( s, a \right) \nabla_\theta \log \pi_\theta (s, a) \mathcal{R}_{s, a} \\
+&= \mathbb{E}_{\pi_\theta} [ \nabla_\theta \log \pi_\theta (s, a) r]
+\end{align*}
+$$
+
+## 7.4. Policy Gradient Theorem
+
+The policy gradient theorem simply states that for any of the earlier[ Policy Objective Functions](#71-policy-objective-functions) we mentioned, the above equation for the policy objective function holds true, just that we use $Q$ instead of $r$:
+
+$$
+\begin{align*}
+\nabla_\theta J(\theta) &= \mathbb{E}_{\pi_\theta} [ \nabla_\theta \log \pi_\theta (s, a) Q(s, a)]
+\end{align*}
+$$
+
+## 7.5. Implementation: Monte-Carlo Policy Gradient (REINFORCE)
+
+In the above equation, you'll notice that there's a $$\mathbb{E}_{\pi_\theta}$$. But as with every iterative algorithm, we don't actually have to compute that. We just naturally keep an estimate of it through sampling. Here's a rough algorithm:
+
+```python
+def REINFORCE(policy, learning_rate):
+    policy.theta.init()
+    for episode in episode_bank:
+        for t in range(0, len(episode)):
+            s, a, G_t = get_at_timestep(t, episode)
+            loss = -learning_rate * torch.log(policy(s, a)) * G_t
+            loss.backward()
+```
+
+## 7.6. Actor-Critic Methods
+
+REINFORCE is a Monte-Carlo method, meaning that we sampled full trajectories and used ground-truth returns $$G_t$$ as our value function. We can also turn this into a shallow version (i.e. introduce bootstrapping) by introducing our friendly old learnt $$Q_w (s,a)$$. Note that we denote $Q$'s weights as $w$ and $\pi$'s weights as $\theta$. Then, our policy gradient becomes:
+
+$$
+\begin{align*}
+\mathbb{E} \left[ \nabla_\theta \log \pi_\theta (s, a) Q_w (s, a) \right]
+\end{align*}
+$$
+
+### Implementation
+
+This means that we can apply pretty much the same algorithms (SARSA / DQN; they're all the same save for some tricks here and there):
+
+```python
+def Q_action_critic(env, policy, Q, policy_lr, Q_lr):
+    policy.theta.init()
+    Q.w.init()
+    a = policy.sample_action(env.s)
+
+    for _ in range(however_many_steps):
+        s_next, r = env.step(a)
+        a_next = policy.sample_action(s_next)
+
+        TD_error = r + Q_lr * Q(s_next, a_next) - Q(s, a)
+        policy_grad = -policy_lr * torch.log(policy(s, a)) * Q(s, a)
+
+        TD_error.backward()
+        policy_grad.backward()
+
+        a = a_next
+        s = s_next
+```
+
+You can use all of the same tricks in the $Q$ part of this implementation (e.g. use 2 $Q$ networks, use soft-updates, etc.).
+
+### Compatible Function Approximation Theorem
+
+The concern with the above Actor-Critic Method is that now you have 2 pieces that are trying to learn at the same time: $Q$ (which itself already poses a moving-target problem), as well as $pi$ (which is no longer just greedy). **Can we still find the global optimum / find the correct solution?**
+
+
+
+
 <script>
 (function () {
   "use strict";
