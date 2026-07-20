@@ -1989,7 +1989,7 @@ Let's see the above convenience at play in the case of a one-step MDP, starting 
 
 $$
 \begin{align*}
-J(\theta) = \mathbb{E}_{\pi_\thetat} [r]
+J(\theta) = \mathbb{E}_{\pi_\theta} [r]
 \end{align*}
 $$
 
@@ -2009,9 +2009,23 @@ The policy gradient theorem simply states that for any of the earlier[ Policy Ob
 
 $$
 \begin{align*}
-\nabla_\theta J(\theta) &= \mathbb{E}_{\pi_\theta} [ \nabla_\theta \log \pi_\theta (s, a) Q(s, a)]
+\nabla_\theta J(\theta) &= \mathbb{E}_{\pi_\theta} [ \nabla_\theta \log \pi_\theta (s, a) Q_{\pi_\theta}(s, a)]
 \end{align*}
 $$
+
+> NOTE: This is something I would just memorize, without remembering the (even if just intuitive) derivation
+
+### Advantage Function
+
+In fact, just like how we used $Q$ instead of $r$, we can also just plug in $A$, as in the **Advantage Function**:
+
+$$
+\begin{align*}
+A_\pi (s, a) &= Q_\pi(s, a) - V_\pi (s)
+\end{align*}
+$$
+
+Alright, so we have $V$, $Q$, and now we have $A$. They all look like variants of the same thing, and indeed, in the end, the learnt policy (assuming some form of greedy) is still the same. But the advantage function is useful because it has lower variance.
 
 ## 7.5. Implementation: Monte-Carlo Policy Gradient (REINFORCE)
 
@@ -2026,6 +2040,8 @@ def REINFORCE(policy, learning_rate):
             loss = -learning_rate * torch.log(policy(s, a)) * G_t
             loss.backward()
 ```
+
+This algorithm has a number of names - Monte-Carlo Policy Gradient, REINFORCE, [Vanilla Policy Gradient](https://spinningup.openai.com/en/latest/algorithms/vpg.html#pseudocode), etc..
 
 ## 7.6. Actor-Critic Methods
 
@@ -2063,12 +2079,21 @@ def Q_action_critic(env, policy, Q, policy_lr, Q_lr):
 
 You can use all of the same tricks in the $Q$ part of this implementation (e.g. use 2 $Q$ networks, use soft-updates, etc.).
 
-### Compatible Function Approximation Theorem
+# 8. Beyond Vanilla Policy Gradient
 
-The concern with the above Actor-Critic Method is that now you have 2 pieces that are trying to learn at the same time: $Q$ (which itself already poses a moving-target problem), as well as $pi$ (which is no longer just greedy). **Can we still find the global optimum / find the correct solution?**
+Since I'd like for us to achieve an understanding of RL sufficiently to extend it to LLM training, where PPO and GRPO are common, I will cover them here.
 
+## 8.1. Proximal Policy Optimization
 
+A 2017 method developed by John Schulman based on his earlier algorithm, Trust Region Policy Optimzation (TRPO). Both PPO and TRPO are motivated by the same question - how big of an update step can you take to improve performance without overstepping and causing performance collapse? For that, we have to introduce a new objective function:
 
+$$
+\begin{align*}
+L (s, a, \theta_k, \theta) &= \min \left( \frac{\pi_\theta (a \mid s)}{\pi_{\theta_k} (a \mid s)} A_{\pi_{\theta_k}} (s, a), \text{clip}\left(  \frac{\pi_\theta (a \mid s)}{\pi_{\theta_k} (a \mid s)} A_{\pi_{\theta_k}}, 1 - \epsilon, 1 + \epsilon \right) A_{\pi_{\theta_k}} (s, a) \right)
+\end{align*}
+$$
+
+where $\theta_k$ is the old policy and $\theta$ is the updated policy.
 
 <script>
 (function () {
