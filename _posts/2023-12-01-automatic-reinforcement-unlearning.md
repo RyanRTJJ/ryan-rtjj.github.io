@@ -1,6 +1,7 @@
 ---
 published: true
 title: Automatic Reinforcement Unlearning
+description: "A review and critique of eliciting latent knowledge that language models hold but won't reveal — based on Burns et al.'s 'discovering latent knowledge in language models without supervision.'"
 date: 2023-12-06 00:00:00 -500
 categories: [research,statistics,interpretability]
 tags: [mechanistic-interpretability]

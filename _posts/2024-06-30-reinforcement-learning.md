@@ -1,6 +1,7 @@
 ---
 published: true
 title: Unified RL
+description: "A reinforcement learning tutorial from fundamentals — MDPs, Bellman equations, value functions, and policy gradients — through PPO and GRPO for LLM training."
 date: 2024-06-30 00:00:00 -500
 categories: [reinforcement learning]
 tags: [reinforcement learning]

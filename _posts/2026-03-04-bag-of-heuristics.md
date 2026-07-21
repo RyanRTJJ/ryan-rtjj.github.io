@@ -1,6 +1,7 @@
 ---
 published: true
 title: Complexity Series (3 / 3) - Bag Of Heuristics
+description: "Why LLMs lean on a 'bag of heuristics' rather than real algorithms for arithmetic — the finale of the Complexity Series, and the crux of why Transformers can't truly generalize arithmetic."
 date: 2026-03-04 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]

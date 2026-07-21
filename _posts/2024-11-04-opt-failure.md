@@ -1,6 +1,10 @@
 ---
 published: true
 title: Optimization Failure &#x2B50;
+description: "Learning / optimization dynamics in ReLU toy models — why autoencoders settle into asymmetric 'optimization failure' solutions even when symmetric superposition solutions exist."
+image:
+  path: /images/opt_failure/asymmetric_failure_4.png
+  alt: "Asymmetric feature arrangement in a ReLU toy model's latent space"
 date: 2025-02-03 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]

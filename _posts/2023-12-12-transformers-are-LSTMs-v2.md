@@ -1,6 +1,10 @@
 ---
 published: true
 title: Transformers are LSTMs v2
+description: "Arguing that LSTM gates are an early form of the attention mechanism — drawing the conceptual connection between LSTMs and transformers."
+image:
+  path: /images/LSTMs_Attention.png
+  alt: "Diagram connecting LSTM gates to attention mechanisms"
 date: 2023-12-12 00:00:00 -500
 categories: [research,ML,time-series]
 tags: [transformers,LSTMs]

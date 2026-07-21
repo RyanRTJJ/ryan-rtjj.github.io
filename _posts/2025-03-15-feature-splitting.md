@@ -1,6 +1,7 @@
 ---
 published: true
 title: Feature Splitting & Feature Absorption
+description: "A critique of feature splitting and feature absorption in sparse autoencoders (SAEs) — problems with how 'features' are defined, and why SAEs may really be doing clustering."
 date: 2025-03-15 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]

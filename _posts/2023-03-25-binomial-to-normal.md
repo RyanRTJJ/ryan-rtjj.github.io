@@ -1,6 +1,10 @@
 ---
 published: true
 title: "The Gaussian's Binomial Origins (In Progress)"
+description: "Deriving the Gaussian (normal) PDF from the binomial distribution — the normal approximation to the binomial, and why π appears in the normal distribution formula."
+image:
+  path: /images/gauss_binom_1_toss.png
+  alt: "Binomial distribution for a single coin flip"
 date: 2023-03-25 00:00:00 -500
 categories: [statistics]
 tags: [linear-algebra,statistics,gaussian,binomial]

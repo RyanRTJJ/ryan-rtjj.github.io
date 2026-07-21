@@ -1,6 +1,10 @@
 ---
 published: true
 title: "Common Spatial Pattern: Discriminator based on PCA"
+description: "Deriving the Common Spatial Pattern (CSP) algorithm from PCA — using class covariance differences for classification, with uses in neuroscience and finance."
+image:
+  path: /images/csp_csp2.png
+  alt: "Data before and after the Common Spatial Pattern transform"
 date: 2023-05-15 00:00:00 -500
 categories: [statistics]
 tags: [linear-algebra,statistics,time-series,neuroscience]

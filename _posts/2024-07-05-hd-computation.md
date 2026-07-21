@@ -1,6 +1,7 @@
 ---
 published: true
 title: High Dimension Computing
+description: "An intro to high-dimensional (hyperdimensional) computing — Pentti Kanerva's symbolic approach — and how it compares to today's neural, embedding-based AI."
 date: 2024-07-05 00:00:00 -500
 categories: [statistics, hd-computing]
 tags: [statistics]

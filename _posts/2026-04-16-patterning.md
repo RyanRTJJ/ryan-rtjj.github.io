@@ -1,6 +1,10 @@
 ---
 published: true
 title: Patterning (WIP)
+description: "Patterning — the 'dual problem' to mechanistic interpretability: shaping training to produce specific model internals. A pared-down, intuition-first distillation of Wang & Murfet."
+image:
+  path: /images/patterning/high_lc_low_lc.png
+  alt: "Pointy versus flat loss-landscape geometry in patterning"
 date: 2026-04-16 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]

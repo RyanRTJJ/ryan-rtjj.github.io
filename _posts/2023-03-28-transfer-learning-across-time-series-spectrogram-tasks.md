@@ -1,6 +1,7 @@
 ---
 published: true
 title: "Multitask Learning Across Time-Series Spectrogram Tasks"
+description: "A multitask and transfer-learning study across time-series tasks using shared spectrogram structure to improve classification (Stanford CS 330 project)."
 date: 2023-03-28 00:00:00 -500
 categories: [research,time-series,multitask-learning,ML]
 tags: [research,time-series,multitask-learning,machine-learning]

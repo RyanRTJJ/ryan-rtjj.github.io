@@ -1,6 +1,7 @@
 ---
 published: true
 title: Thoughts on Hidden Structure in MLP Space
+description: "A hypothesis on hidden structure in MLP space: why anticorrelated, mutually-sparse features prefer the same tegum factor, and when superposition becomes PCA-like."
 date: 2025-04-28 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]

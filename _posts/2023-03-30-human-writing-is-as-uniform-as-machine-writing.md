@@ -1,6 +1,7 @@
 ---
 published: true
 title: "Human Writing is as Uniform as Machine Writing"
+description: "Building a zero-shot detector for LLM-generated text without knowing the source model — a Stanford CS 224N NLP project on AI-generated text detection."
 date: 2023-03-30 00:00:00 -500
 categories: [research,NLP,ML,statistics]
 tags: [research,llm,statistics,machine-learning]

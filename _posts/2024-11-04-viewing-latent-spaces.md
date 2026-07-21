@@ -1,6 +1,10 @@
 ---
 published: true
 title: Superposition - An Actual View of Latent Spaces &#x2B50; &#x2B50;
+description: "A geometric intuition for the toy model of superposition — how features become linear directions in a ReLU model's latent space, sharing dimensions without interference."
+image:
+  path: /images/opt_failure/latent_zones_thumbnail.png
+  alt: "Latent zones of a ReLU toy model's feature space"
 date: 2024-11-04 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]
