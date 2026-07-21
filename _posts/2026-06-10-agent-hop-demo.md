@@ -1,5 +1,5 @@
 ---
-published: true
+published: false
 title: Widget Demo — Hopping Agent
 date: 2026-06-10 00:01:00 -0800
 categories: [meta]

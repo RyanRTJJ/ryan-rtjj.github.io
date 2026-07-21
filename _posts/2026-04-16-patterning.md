@@ -1,6 +1,6 @@
 ---
 published: true
-title: Patterning
+title: Patterning (WIP)
 date: 2026-04-16 00:00:00 -500
 categories: [mechanistic interpretability]
 tags: [mechanistic interpretability]
