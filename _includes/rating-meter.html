@@ -1,0 +1,19 @@
+{%- comment -%}
+  Renders one rating chip: a label + either a 5-segment gauge or the word "unrated".
+  Params:
+    include.label  — text label, e.g. "Length"
+    include.value  — integer 0–5, or nil/empty to show "unrated"
+{%- endcomment -%}
+<span class="meter-chip" role="img" aria-label="{{ include.label }}: {% if include.value %}{{ include.value }} out of 5{% else %}unrated{% endif %}">
+  <span class="meter-chip__label">{{ include.label }}</span>
+  {%- if include.value -%}
+    {%- assign v = include.value | plus: 0 -%}
+    <span class="meter" aria-hidden="true">
+      {%- for i in (1..5) -%}
+        <span class="meter__seg{% if i <= v %} is-filled{% endif %}"></span>
+      {%- endfor -%}
+    </span>
+  {%- else -%}
+    <span class="meter-unrated" aria-hidden="true">Unrated</span>
+  {%- endif -%}
+</span>

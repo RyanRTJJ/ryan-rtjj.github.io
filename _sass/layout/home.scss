@@ -176,3 +176,103 @@
     padding-right: 0;
   }
 }
+
+/* ------------------------------------------------------------------ *
+ *  Brand palette (available site-wide as CSS custom properties)
+ * ------------------------------------------------------------------ */
+:root {
+  --paper: #fcfbf8;
+  --dark-paper: #fff9f2;
+  --ivory-light: #fafaf7;
+  --ivory-medium: #f0f0eb;
+  --ivory-dark: #e5e4df;
+  --manila: #ebdbbc;
+  --kraft-light: #faeee1;
+  --kraft: #d4a27f;
+  --book-cloth: #cc785c;
+  --cloud-light: #bfbfba;
+  --cloud-medium: #91918d;
+  --cloud-dark: #666663;
+  --error: #bf4d43;
+  --bright-orange: #ffa500;
+  --light-sky: #e7f1fa;
+  --unfocused: #bfdfff;
+  --mid-focus: #8cc0f5;
+  --focus: #61aaf4;
+  --hard-focus: #006bd6;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Length / Insight rating meters (post cards + post pages)
+ *  Tweak the CSS variables below to restyle every meter at once.
+ * ------------------------------------------------------------------ */
+.rating-meters {
+  display: inline-flex;
+  flex-direction: row;      /* chips side by side; use `column` to stack */
+  flex-wrap: wrap;
+  gap: 0.9rem;              /* spacing between chips */
+  align-items: center;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.meter-chip {
+  /* --- knobs --- */
+  --meter-fill: var(--focus);    /* filled segment colour */
+  --meter-empty: var(--paper);  /* empty segment colour  */
+  --meter-chip-bg: var(--light-sky);
+  --meter-seg-size: 0.55rem;          /* circle diameter (width = height) */
+  --meter-seg-radius: 50%;            /* 50% = circular cells  */
+  --meter-seg-gap: 4px;               /* gap between segments  */
+  --meter-chip-radius: 999px;         /* chip (pill) radius    */
+  --meter-chip-w: 9rem;               /* fixed chip width      */
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: var(--meter-chip-w);
+  box-sizing: border-box;
+  padding: 0.22rem 0.45rem;
+  border-radius: var(--meter-chip-radius);
+  background: var(--meter-chip-bg);
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.meter-chip__label {
+  min-width: 3.4rem;                 /* keeps both bars left-aligned */
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+  padding-bottom: 0.1rem;
+  padding-left: 0.2rem;
+}
+
+.meter {
+  display: inline-flex;
+  gap: var(--meter-seg-gap);
+}
+
+.meter__seg {
+  width: var(--meter-seg-size);
+  height: var(--meter-seg-size);
+  border-radius: var(--meter-seg-radius);
+  background: var(--meter-empty);
+
+  &.is-filled {
+    background: var(--meter-fill);
+  }
+}
+
+/* "unrated" text shown in place of the gauge */
+.meter-unrated {
+  font-style: italic;
+  opacity: 0.55;
+  padding-right: 0.6rem;
+}
+
+/* Dark mode: lift the empty/background colours so segments stay visible */
+html[data-mode="dark"] .meter-chip {
+  --meter-empty: rgba(255, 255, 255, 0.16);
+  --meter-chip-bg: rgba(255, 255, 255, 0.05);
+}

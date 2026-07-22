@@ -1,6 +1,8 @@
 ---
 published: true
 title: Optimization Failure &#x2B50;
+length: 5
+insight: 5
 description: "Learning / optimization dynamics in ReLU toy models — why autoencoders settle into asymmetric 'optimization failure' solutions even when symmetric superposition solutions exist."
 image:
   path: /images/opt_failure/asymmetric_failure_4.png

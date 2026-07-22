@@ -1,6 +1,8 @@
 ---
 published: true
 title: Multi-Layer Latent Space Visualization
+length: 3
+insight: 4
 description: "Deriving an 'un-ReLU' operation to invert multi-layer ReLU networks — reverse-engineering the range of MLP inputs that produce a desired output."
 image:
   path: /images/multi_layer_space/chained_latent_spaces.png

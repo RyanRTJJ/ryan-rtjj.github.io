@@ -1,6 +1,8 @@
 ---
 published: true
 title: Complexity Series (2 / 3) - Carry-Over Circuits
+length: 3
+insight: 3
 description: "How Transformers add multi-digit numbers via carry-over circuits — and why it caps arithmetic length at their attention-head count. Part 2 of the case against Transformer arithmetic."
 image:
   path: /images/arithmetic_circuits/3_digit_claim.png

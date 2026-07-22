@@ -26,6 +26,8 @@ tail_includes:
     </span>
     {% endif %}
 
+  {% include ratings.html item=page %}
+
   <!-- Preview-image banner: opt-in per post via `show_banner: true`.
        `page.image` alone still feeds jekyll-seo-tag (og:image / social card). -->
   {% if page.image and page.show_banner %}

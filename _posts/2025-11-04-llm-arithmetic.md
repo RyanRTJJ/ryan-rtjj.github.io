@@ -2,6 +2,8 @@
 published: true
 title: Complexity Series (1 / 3) - LLM Arithmetic &#x2B50;
 description: "Beyond proving 'number circles' exist: how Transformers actually form and use them to compute modulo arithmetic — part 1 of the case that Transformers can't truly generalize arithmetic."
+length: 5
+insight: 5
 image:
   path: /images/llm_arithmetic/prediction_4hz_32hz.png
   alt: "Predicted 4Hz number circle and 32Hz attention structure"

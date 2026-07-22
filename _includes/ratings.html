@@ -1,0 +1,12 @@
+{%- comment -%}
+  Renders the Length / Insight rating chips for a post or page.
+  Pass the object as `item`, e.g. {% include ratings.html item=post %} or item=page.
+  Each chip shows a 5-segment gauge, or the word "unrated" if that field is absent.
+  A value of 0 renders an all-empty gauge (distinct from omitting the field).
+{%- endcomment -%}
+{%- assign _len = include.item.length -%}
+{%- assign _insight = include.item.insight -%}
+<div class="rating-meters">
+  {% include rating-meter.html label="Length" value=_len %}
+  {% include rating-meter.html label="Insight" value=_insight %}
+</div>
