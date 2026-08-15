@@ -1,5 +1,5 @@
 ---
-published: true
+published: false
 title: Patterning (WIP)
 description: "Patterning — the 'dual problem' to mechanistic interpretability: shaping training to produce specific model internals. A pared-down, intuition-first distillation of Wang & Murfet."
 image:
