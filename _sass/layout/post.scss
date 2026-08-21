@@ -54,7 +54,9 @@
 }
 
 h1 + .post-meta {
-  span + span::before {
+  /* Dot separators between top-level meta items only; the rating chips are
+     nested spans and must not pick them up. */
+  > span + span::before {
     @include dot;
   }
 

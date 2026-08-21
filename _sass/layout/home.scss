@@ -271,6 +271,13 @@
   padding-right: 0.6rem;
 }
 
+/* On a post page the chips sit inline in the meta line, so drop the block
+   margins and centre them against the surrounding text. */
+.post-meta .rating-meters {
+  margin: 0 0 0 0.15rem;
+  vertical-align: middle;
+}
+
 /* Dark mode: lift the empty/background colours so segments stay visible */
 html[data-mode="dark"] .meter-chip {
   --meter-empty: rgba(255, 255, 255, 0.16);
