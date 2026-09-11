@@ -21,6 +21,12 @@ To set the stage, one may ask: **who cares?** Well, wouldn't it be great if you 
 
 But is that even calculable? How would we do that? Generally, only bijective (one-to-one) functions are reversible, and many models do contain many-to-one components, namely the $\text{ReLU}$ activation function, causing many to think that reverse engineering inputs from desired outputs is not possible. Indeed, most of deep models (linear transformations) is reversible, which leaves the main challenge to be $\text{ReLU}$. While reverse-engineering the **exact** inputs from a desired output is not possible, reverse-engineering a **range** of input values is very possible. In fact, the way that $\text{ReLU}$ is usually used (following an up-projection from `d_small` to `d_large`), makes it such that the degrees of freedom in the range of possible inputs is only `d_small`, which is much smaller than `d_large`. This makes the range of input values that could give a desired value in the output space much more constrained and useful. However, doing so turns out to be rather computationally expensive. **This blog post introduces and walks through the logic of computing an "un-$\text{ReLU}$" operation, and talks about how one may implement this exponentially expensive operation.**
 
+<div class="github-button-wrapper">
+  <a href="https://github.com/RyanRTJJ/lat_space_lens" class="github-button" target="_blank" rel="noopener noreferrer">
+    <i class="fab fa-github mr-2" aria-hidden="true"></i>lat_space_lens GitHub Repo
+  </a>
+</div>
+
 # Example Of Reverse-Engineered Inputs
 
 Linear transformations interspersed with non-linearities are what make up the backbone of all deep models. If you wanted to reverse-engineer inputs based on some desired output, you can't really escape this simplification model of deep models. Hence, we'll think of this simplified model of multi-layered MLPs:
